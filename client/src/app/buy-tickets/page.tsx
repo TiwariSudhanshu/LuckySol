@@ -1,57 +1,15 @@
 "use client"
-
-import Link from "next/link"
+import { Header } from "@/components/header"
+import { Footer } from "@/components/footer"
+import BgElements from "@/components/bgElements"
 
 export default function BuyTicketsPage() {
   return (
     <main className="relative min-h-dvh bg-black text-white font-sans">
-      {/* Decorative confetti (aria-hidden) */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute top-8 left-6 size-2 rounded-full bg-lime-500" />
-        <div className="absolute top-16 right-10 h-2 w-4 rotate-12 rounded bg-pink-400" />
-        <div className="absolute top-28 left-1/3 size-2 rounded-full bg-violet-400" />
-        <div className="absolute top-40 right-1/4 h-3 w-3 -rotate-12 rounded-sm bg-lime-500" />
-        <div className="absolute top-64 left-10 h-2 w-5 rotate-45 rounded bg-violet-400" />
-        <div className="absolute top-72 right-8 size-2 rounded-full bg-pink-400" />
-        <div className="absolute top-1/2 left-1/5 h-2 w-4 -rotate-12 rounded bg-lime-400" />
-        <div className="absolute bottom-24 left-1/3 size-2 rounded-full bg-violet-400" />
-        <div className="absolute bottom-16 right-1/4 h-2 w-5 rotate-12 rounded bg-pink-400" />
-      </div>
-
-      {/* Header */}
-      <header className="relative z-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 md:py-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="h-8 w-8 rounded-full bg-lime-500" aria-hidden="true" />
-            <span className="text-lg font-semibold tracking-wide">LuckySol</span>
-          </Link>
-          <nav className="hidden items-center gap-3 md:flex">
-            <Link href="/buy-tickets" className="rounded px-3 py-2 text-sm text-zinc-300 hover:text-white">
-              Buy Tickets
-            </Link>
-            <Link href="/my-tickets" className="rounded px-3 py-2 text-sm text-zinc-300 hover:text-white">
-              My Tickets
-            </Link>
-            <Link href="/results" className="rounded px-3 py-2 text-sm text-zinc-300 hover:text-white">
-              Results
-            </Link>
-            <Link href="/admin" className="rounded px-3 py-2 text-sm text-zinc-300 hover:text-white">
-              Admin
-            </Link>
-            <button
-              type="button"
-              className="rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
-              onClick={() => {}}
-              aria-label="Connect Wallet"
-            >
-              Connect Wallet
-            </button>
-          </nav>
-        </div>
-      </header>
-
+      <BgElements />
+      <Header />
       {/* Hero */}
-      <section className="relative z-10">
+      <section className="relative z-10 ">
         <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 md:pt-14 md:pb-16">
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
             Enter the next LuckySol round
@@ -66,7 +24,7 @@ export default function BuyTicketsPage() {
       </section>
 
       {/* Purchase Card */}
-      <section className="relative z-10">
+      <section className="relative z-10 pb-25">
         <div className="mx-auto w-full max-w-xl px-4 pb-16">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur">
             {/* Number of Tickets */}
@@ -148,6 +106,7 @@ export default function BuyTicketsPage() {
           </div>
         </div>
       </section>
+      <Footer />
     </main>
   )
 }

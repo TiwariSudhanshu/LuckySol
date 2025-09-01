@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import BgElements from "@/components/bgElements"
 
 type Status = "Pending" | "Won" | "Lost"
 
@@ -23,17 +24,13 @@ function StatusPill({ status }: { status: Status }) {
 }
 
 export default function MyTicketsPage() {
+  const total = demoTickets.length
+  const wins = demoTickets.filter((t) => t.status === "Won").length
+  const pending = demoTickets.filter((t) => t.status === "Pending").length
+
   return (
     <main className="relative min-h-dvh bg-black text-white font-sans">
-      {/* Decorative confetti */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute top-8 left-6 size-2 rounded-full bg-lime-500" />
-        <div className="absolute top-16 right-10 h-2 w-4 rotate-12 rounded bg-pink-400" />
-        <div className="absolute top-28 left-1/3 size-2 rounded-full bg-violet-400" />
-        <div className="absolute top-40 right-1/4 h-3 w-3 -rotate-12 rounded-sm bg-lime-500" />
-        <div className="absolute top-64 left-10 h-2 w-5 rotate-45 rounded bg-violet-400" />
-        <div className="absolute top-72 right-8 size-2 rounded-full bg-pink-400" />
-      </div>
+      <BgElements />
 
       {/* Header */}
       <header className="relative z-10">
@@ -69,7 +66,7 @@ export default function MyTicketsPage() {
 
       {/* Hero */}
       <section className="relative z-10">
-        <div className="mx-auto max-w-6xl px-4 pt-8 pb-6 md:pt-14 md:pb-10">
+        <div className="mx-auto max-w-6xl px-4 pt-8 pb-6 md:pt-14 md:pb-8">
           <p className="mb-2 text-center text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
             Your entries
           </p>
@@ -80,43 +77,113 @@ export default function MyTicketsPage() {
         </div>
       </section>
 
-      {/* Tickets */}
+      <section className="relative z-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-4 px-4 pb-6 sm:grid-cols-3">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur">
+            <div className="text-xs uppercase tracking-wider text-zinc-400">Total Tickets</div>
+            <div className="mt-2 text-3xl font-bold text-white">{total}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur">
+            <div className="text-xs uppercase tracking-wider text-zinc-400">Wins</div>
+            <div className="mt-2 text-3xl font-bold text-white">{wins}</div>
+          </div>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur">
+            <div className="text-xs uppercase tracking-wider text-zinc-400">Pending</div>
+            <div className="mt-2 text-3xl font-bold text-white">{pending}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Toolbar for filters/sorting */}
+      <section className="relative z-10">
+        <div className="mx-auto max-w-6xl px-4 pb-2">
+          <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-900">
+                All
+              </button>
+              <button className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-900">
+                Pending
+              </button>
+              <button className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-900">
+                Won
+              </button>
+              <button className="rounded-full border border-zinc-800 bg-zinc-950/70 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-900">
+                Lost
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="rounded-xl border border-zinc-800 bg-black px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-900">
+                Sort by: Recent
+              </button>
+              <button className="rounded-xl bg-lime-500 px-3 py-1.5 text-xs font-semibold text-black hover:bg-lime-400">
+                Export CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Tickets - wider boxes layout */}
       <section className="relative z-10">
         <div className="mx-auto max-w-6xl px-4 pb-16">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4">
             {demoTickets.map((t) => (
               <div key={t.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 backdrop-blur">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-white">{t.id}</h2>
-                  <StatusPill status={t.status} />
-                </div>
-                <dl className="mt-3 space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <dt className="text-zinc-400">Round</dt>
-                    <dd className="font-medium text-white">#{t.round}</dd>
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="hidden size-10 shrink-0 rounded-xl bg-lime-500 md:block" aria-hidden="true" />
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-sm font-semibold text-white">{t.id}</h2>
+                        <StatusPill status={t.status} />
+                      </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm md:grid-cols-3">
+                        <div className="flex items-center justify-between md:justify-start md:gap-2">
+                          <dt className="text-zinc-400">Round</dt>
+                          <dd className="font-medium text-white">#{t.round}</dd>
+                        </div>
+                        <div className="flex items-center justify-between md:justify-start md:gap-2">
+                          <dt className="text-zinc-400">Purchased</dt>
+                          <dd className="font-medium text-white">{t.purchasedAt}</dd>
+                        </div>
+                        <div className="hidden items-center justify-between md:flex md:justify-start md:gap-2">
+                          <dt className="text-zinc-400">Mode</dt>
+                          <dd className="font-medium text-white">Standard</dd>
+                        </div>
+                      </dl>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-zinc-400">Purchased</dt>
-                    <dd className="font-medium text-white">{t.purchasedAt}</dd>
+
+                  <div className="flex w-full items-center gap-2 md:w-auto">
+                    <button
+                      type="button"
+                      className="w-full rounded-xl border border-zinc-800 bg-black px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-900 md:w-auto"
+                    >
+                      Details
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded-xl bg-lime-500 px-3 py-2 text-sm font-semibold text-black hover:bg-lime-400 md:w-auto"
+                    >
+                      Connect Wallet
+                    </button>
                   </div>
-                </dl>
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="w-full rounded-xl border border-zinc-800 bg-black px-3 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-900"
-                  >
-                    Details
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full rounded-xl bg-lime-500 px-3 py-2 text-sm font-semibold text-black hover:bg-lime-400"
-                  >
-                    Connect Wallet
-                  </button>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Empty state */}
+          {demoTickets.length === 0 && (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-8 text-center text-sm text-zinc-300">
+              You don’t have any tickets yet.{" "}
+              <Link href="/buy-tickets" className="font-semibold text-lime-400 hover:text-lime-300">
+                Buy your first ticket
+              </Link>
+              .
+            </div>
+          )}
         </div>
       </section>
     </main>

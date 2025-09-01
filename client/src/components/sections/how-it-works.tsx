@@ -1,6 +1,22 @@
 "use client"
 
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useRouter } from "next/navigation";
+
 export function HowItWorks() {
+    const router = useRouter();
+    const {connected} = useWallet();
+    const {setVisible} = useWalletModal();
+  
+    const handleNavigate = async()=>{
+    if(connected){
+      router.push("/dashboard");
+    }else{
+      alert("Please connect your wallet to proceed.");
+      setVisible(true);
+    }
+  }
   return (
     <section id="how" className="relative z-10 border-t border-zinc-900 bg-zinc-950 py-28 md:py-36">
       <div className="mx-auto w-full max-w-7xl px-6 md:px-16">
@@ -38,7 +54,7 @@ export function HowItWorks() {
         <div className="mx-auto flex max-w-xs justify-center">
           <button
             type="button"
-            onClick={() => {}}
+            onClick={handleNavigate}
             className="w-full rounded-full bg-lime-500 px-8 py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
           >
             Get Started

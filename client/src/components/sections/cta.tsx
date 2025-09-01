@@ -1,6 +1,22 @@
 "use client"
 
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useRouter } from "next/navigation";
+
 export function BottomCTA() {
+    const router = useRouter();
+    const {connected} = useWallet();
+    const {setVisible} = useWalletModal();
+  
+    const handleNavigate = async()=>{
+    if(connected){
+      router.push("/dashboard");
+    }else{
+      alert("Please connect your wallet to proceed.");
+      setVisible(true);
+    }
+  }
   return (
     <section id="cta" className="relative z-10 border-t border-zinc-900">
       <div className="mx-auto max-w-4xl px-4 py-14 md:py-20 text-center">
@@ -11,6 +27,7 @@ export function BottomCTA() {
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
             type="button"
+            onClick={handleNavigate}
             className="rounded-full bg-lime-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
           >
             Hope In

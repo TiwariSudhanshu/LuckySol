@@ -4,8 +4,28 @@ import type React from "react";
 import BgElements from "../bgElements";
 
 import { SwapCard } from "./swap-card";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useRouter } from "next/navigation";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useEffect } from "react";
+
+
 
 export function Hero() {
+  const router = useRouter();
+  const {connected} = useWallet();
+  const {setVisible} = useWalletModal();
+
+  const handleNavigate = async()=>{
+  if(connected){
+    router.push("/dashboard");
+  }else{
+    alert("Please connect your wallet to proceed.");
+    setVisible(true);
+  }
+}
+
+
   return (
     <section className="relative z-10">
       <BgElements />
@@ -25,7 +45,7 @@ export function Hero() {
             <div className="mt-4 ">
               <button
                 type="button"
-                onClick={() => {}}
+                onClick={handleNavigate}
                 className=" rounded- cursor-pointer bg-lime-500 px-20 rounded-3xl py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
               >
                Launch
