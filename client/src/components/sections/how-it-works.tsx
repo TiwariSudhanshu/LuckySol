@@ -41,7 +41,7 @@ export function HowItWorks() {
             onClick={() => {}}
             className="w-full rounded-full bg-lime-500 px-8 py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
           >
-            Connect Wallet
+            Get Started
           </button>
         </div>
 

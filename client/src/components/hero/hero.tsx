@@ -11,7 +11,7 @@ export function Hero() {
       <BgElements />
       <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 relative z-10 md:pt-50 md:pb-50">
         <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-[55%_45%]">
-          <div>
+          <div className="text-center sm:text-left py-10 sm:py-0">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
               Team up with LuckySol
             </p>

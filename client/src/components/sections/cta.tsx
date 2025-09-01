@@ -13,7 +13,7 @@ export function BottomCTA() {
             type="button"
             className="rounded-full bg-lime-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
           >
-            Connect Wallet
+            Hope In
           </button>
           <a
             href="#features"

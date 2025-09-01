@@ -1,6 +1,24 @@
 "use client"
 
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+
+
 export function SwapCard() {
+    const { publicKey, connected, disconnect } = useWallet();
+    const { setVisible } = useWalletModal();
+  
+    const handleWalletAction = () => {
+      if (connected) {
+        disconnect();
+      } else {
+        setVisible(true);
+      }
+    };
+  
+    const formatPublicKey = (key: string) => {
+      return `${key.slice(0, 4)}...${key.slice(-4)}`;
+    };
   return (
     <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur">
       <div className="mb-4">
@@ -60,11 +78,15 @@ export function SwapCard() {
 
       <button
         type="button"
-        onClick={() => {}}
         aria-label="Connect Wallet"
+        onClick={handleWalletAction}
         className="mb-3 w-full rounded-2xl bg-lime-500 py-3 text-center text-sm font-bold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
       >
-        Connect Wallet
+         {connected ? (
+              <span className="truncate max-w-full">{formatPublicKey(publicKey?.toBase58() || '')}</span>
+            ) : (
+              <span>Connect Wallet</span>
+            )}
       </button>
 
       <div className="mt-2 flex items-center justify-between">
