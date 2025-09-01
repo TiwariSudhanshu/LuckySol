@@ -40,9 +40,7 @@ export function Leaderboard() {
             </div>
           ))}
         </div>
-        <p className="mt-3 text-center text-xs text-zinc-400">
-          Demo data. Hook to your on-chain program or API to show live leaders.
-        </p>
+
       </div>
     </section>
   )

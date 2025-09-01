@@ -1,27 +1,35 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
+import BgElements from "../bgElements";
 
-import { SwapCard } from "./swap-card"
+import { SwapCard } from "./swap-card";
 
 export function Hero() {
   return (
     <section className="relative z-10">
-      <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 md:pt-50 md:pb-50">
+      <BgElements />
+      <div className="mx-auto max-w-6xl px-4 pt-8 pb-12 relative z-10 md:pt-50 md:pb-50">
         <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-[55%_45%]">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">Team up with LuckySol</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
+              Team up with LuckySol
+            </p>
             <h1 className="text-balance text-3xl font-extrabold leading-tight md:text-5xl">
               Get your slice of the solana gaming pie
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-zinc-300 md:text-base">
-              A clean, dark neon landing page. UI only—add your wallet and contract logic later.
+             LuckySol is a fair, transparent Solana-based lottery where you can play, win, and get instant payouts , all on-chain with verifiable randomness. Your luck, your rules
             </p>
 
-            <div className="mt-4">
-              <a href="#how" className="text-sm text-zinc-300 hover:text-white">
-                Looking to learn more?
-              </a>
+            <div className="mt-4 ">
+              <button
+                type="button"
+                onClick={() => {}}
+                className=" rounded- cursor-pointer bg-lime-500 px-20 rounded-3xl py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
+              >
+               Launch
+              </button>
             </div>
           </div>
 
@@ -33,7 +41,7 @@ export function Hero() {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function OrbitBorder({ children }: { children: React.ReactNode }) {
@@ -47,18 +55,63 @@ function OrbitBorder({ children }: { children: React.ReactNode }) {
         aria-hidden="true"
       >
         <defs>
-          <filter id="softGlowLime" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="rgb(163,230,53)" floodOpacity="0.55" />
+          <filter
+            id="softGlowLime"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="2"
+              floodColor="rgb(163,230,53)"
+              floodOpacity="0.55"
+            />
           </filter>
-          <filter id="softGlowViolet" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="rgb(167,139,250)" floodOpacity="0.5" />
+          <filter
+            id="softGlowViolet"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="2"
+              floodColor="rgb(167,139,250)"
+              floodOpacity="0.5"
+            />
           </filter>
-          <filter id="softGlowPink" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="rgb(244,114,182)" floodOpacity="0.5" />
+          <filter
+            id="softGlowPink"
+            x="-50%"
+            y="-50%"
+            width="200%"
+            height="200%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="2"
+              floodColor="rgb(244,114,182)"
+              floodOpacity="0.5"
+            />
           </filter>
         </defs>
 
-        <rect x="2" y="2" width="96" height="96" rx="8" fill="none" stroke="none" pathLength={100} />
+        <rect
+          x="2"
+          y="2"
+          width="96"
+          height="96"
+          rx="8"
+          fill="none"
+          stroke="none"
+          pathLength={100}
+        />
 
         <rect
           className="orbit orbit--lime"
@@ -139,5 +192,5 @@ function OrbitBorder({ children }: { children: React.ReactNode }) {
         }
       `}</style>
     </div>
-  )
+  );
 }
