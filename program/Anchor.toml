@@ -9,7 +9,7 @@ skip-lint = false
 program = "EN3hAGsNiDrR8rnNriVaMc2sYPzZQjiRugeXESy4CKMz"
 
 [registry]
-url = "https://api.apr.dev"
+url = "http://127.0.0.1:8899"
 
 [provider]
 cluster = "localnet"

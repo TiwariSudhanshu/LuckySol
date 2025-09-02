@@ -1,48 +1,50 @@
 use anchor_lang::prelude::*;
-use crate::state::{Lottery,Round};
-
-pub fn handle(ctx: Context<StartRound>) -> Result<()> {
-    let lottery = &mut ctx.accounts.lottery;
-    let round = &mut ctx.accounts.round;
-let vault = &mut ctx.accounts.vault;
-     lottery.current_round += 1;
-    round.round_number = lottery.current_round;
-    round.total_tickets = 0;
-    round.is_closed = false;
-    round.prize_pool = 0;
-    round.winner = None;
-    round.bump = *ctx.bumps.get("round").unwrap();
-
-    Ok(())
-
-}
+use crate::state::*;
 
 #[derive(Accounts)]
 pub struct StartRound<'info> {
-    #[account(mut, has_one = admin)]
-    
+    #[account(
+        mut,
+        has_one = authority
+    )]
     pub lottery: Account<'info, Lottery>,
-    
-    
+
     #[account(
         init,
-        payer = admin,
-        space = 8 + 8 + 8 + 1 + 8 + 32 + 1, 
-        seeds = [b"round", lottery.key().as_ref(), &lottery.current_round.to_le_bytes()], bump)]
-    
-        pub round: Account<'info, Round>,
-
-           #[account(
-        init,
-        payer = admin,
-        seeds = [b"vault", round.key().as_ref()],
-        bump,
-        space = 8 
+        payer = authority,
+        space = Round::SPACE,
+        seeds = [b"round", lottery.key().as_ref(), lottery.current_round.to_le_bytes().as_ref()],
+        bump
     )]
-    pub vault: Account<'info, VaultAccount>,
-    
-    #[account(mut)]
-    pub admin: Signer<'info>,
+    pub round: Account<'info, Round>,
 
+    #[account(mut)]
+    pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+pub fn handler(ctx: Context<StartRound>) -> Result<()> {
+    let lottery = &mut ctx.accounts.lottery;
+    let round = &mut ctx.accounts.round;
+
+    require!(lottery.is_active, crate::LotteryError::LotteryNotActive);
+
+    let clock = Clock::get()?;
+
+    round.lottery = lottery.key();
+    round.round_id = lottery.current_round;
+    round.status = RoundStatus::Active;
+    round.start_time = clock.unix_timestamp;
+    round.end_time = None;
+    round.tickets_sold = 0;
+    round.winner_ticket_id = None;
+    round.winner = None;
+    round.prize_amount = 0;
+    round.randomness_requested = false;
+    round.randomness = None;
+    round.bump = ctx.bumps.round;
+
+    msg!("Round {} started for lottery {}", lottery.current_round, lottery.lottery_id);
+
+    Ok(())
 }

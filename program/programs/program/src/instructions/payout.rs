@@ -1,75 +1,85 @@
 use anchor_lang::prelude::*;
-use crate::state::{Round, VaultAccount};
-use crate::errors::LotteryError;
-
-pub fn handle(ctx: Context<Payout>) -> Result<()> {
-    let round = &ctx.accounts.round;
-    let vault = &mut ctx.accounts.vault;
-      let winner_pubkey = round.winner.ok_or(LotteryError::NoWinner)?;
-       let total = round.prize_pool;
-    let platform_fee = total * 5 / 100;
-    let admin_fee = total * 5 / 100;
-    let winner_amount = total - platform_fee - admin_fee;
-
-        // 1️⃣ Transfer to winner
-    let ix_winner = anchor_lang::solana_program::system_instruction::transfer(
-        &vault.key(),
-        &winner_pubkey,
-        winner_amount,
-    );
-
-    // 2️⃣ Transfer to platform
-    let ix_platform = anchor_lang::solana_program::system_instruction::transfer(
-        &vault.key(),
-        &ctx.accounts.platform.key(),
-        platform_fee,
-    );
-
-    // 3️⃣ Transfer to admin
-    let ix_admin = anchor_lang::solana_program::system_instruction::transfer(
-        &vault.key(),
-        &ctx.accounts.admin.key(),
-        admin_fee,
-    );
-
-    let seeds = &[b"vault", round.key().as_ref(), &[vault.bump]];
-
-      anchor_lang::solana_program::program::invoke_signed(
-        &ix_winner,
-        &[vault.to_account_info(), ctx.accounts.winner.to_account_info()],
-        &[seeds],
-    )?;
-
-    anchor_lang::solana_program::program::invoke_signed(
-        &ix_platform,
-        &[vault.to_account_info(), ctx.accounts.platform.to_account_info()],
-        &[seeds],
-    )?;
-
-    anchor_lang::solana_program::program::invoke_signed(
-        &ix_admin,
-        &[vault.to_account_info(), ctx.accounts.admin.to_account_info()],
-        &[seeds],
-    )?;
-    
-    Ok(())
-}
-
+use crate::state::*;
 
 #[derive(Accounts)]
 pub struct Payout<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"lottery", lottery.lottery_id.to_le_bytes().as_ref()],
+        bump = lottery.bump
+    )]
+    pub lottery: Account<'info, Lottery>,
+
+    #[account(
+        mut,
+        seeds = [b"round", lottery.key().as_ref(), round.round_id.to_le_bytes().as_ref()],
+        bump = round.bump
+    )]
     pub round: Account<'info, Round>,
 
-    #[account(mut, seeds = [b"vault", round.key().as_ref()], bump)]
-    pub vault: Account<'info, VaultAccount>,
+    #[account(
+        mut,
+        seeds = [b"vault", lottery.key().as_ref()],
+        bump = vault_account.bump
+    )]
+    pub vault_account: Account<'info, VaultAccount>,
+
+    /// CHECK: This is the vault account for holding SOL
+    #[account(
+        mut,
+        seeds = [b"vault_sol", lottery.key().as_ref()],
+        bump
+    )]
+    pub vault: UncheckedAccount<'info>,
 
     #[account(mut)]
-    pub winner: AccountInfo<'info>,
+    pub winner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
 
-    #[account(mut)]
-    pub platform: AccountInfo<'info>,
+pub fn handler(ctx: Context<Payout>) -> Result<()> {
+    let round = &mut ctx.accounts.round;
+    let vault_account = &mut ctx.accounts.vault_account;
+    let lottery = &ctx.accounts.lottery;
 
-    #[account(mut)]
-    pub admin: Signer<'info>,
+    require!(round.status == RoundStatus::Finished, crate::LotteryError::RoundNotFinished);
+    require!(round.winner.is_none(), crate::LotteryError::PayoutAlreadyClaimed);
+
+    let winning_ticket_id = round.winner_ticket_id.ok_or(crate::LotteryError::NoWinner)?;
+
+    // For simplicity, we'll set the winner directly here
+    // In a real implementation, you'd verify ticket ownership through a separate account
+    
+    // Calculate payout (90% of prize pool to winner, 10% as house fee)
+    let total_prize = round.prize_amount;
+    let house_fee = total_prize / 10; // 10%
+    let winner_payout = total_prize - house_fee;
+
+    // Transfer winnings to winner
+    let lottery_key = lottery.key();
+    let vault_seeds = &[
+        b"vault_sol",
+        lottery_key.as_ref(),
+        &[ctx.bumps.vault]
+    ];
+
+    **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= winner_payout;
+    **ctx.accounts.winner.to_account_info().try_borrow_mut_lamports()? += winner_payout;
+
+    // Update vault account
+    vault_account.withdraw(winner_payout)?;
+
+    // Mark winner in round
+    round.winner = Some(ctx.accounts.winner.key());
+    round.status = RoundStatus::Closed;
+
+    msg!(
+        "Payout of {} lamports sent to winner {} for round {} (ticket {})",
+        winner_payout,
+        ctx.accounts.winner.key(),
+        round.round_id,
+        winning_ticket_id
+    );
+
+    Ok(())
 }
