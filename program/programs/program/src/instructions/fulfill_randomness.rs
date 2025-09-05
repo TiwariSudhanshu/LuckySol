@@ -1,47 +1,30 @@
 use anchor_lang::prelude::*;
-use crate::state::*;
+use crate::contexts::FulfillRandomness;
+use crate::state::LotteryState;
+use crate::errors::LotteryError;
 
-#[derive(Accounts)]
-pub struct FulfillRandomness<'info> {
-    #[account(
-        has_one = authority
-    )]
-    pub lottery: Account<'info, Lottery>,
+pub fn fulfill_randomness_handler(
+    ctx: Context<FulfillRandomness>,
+    randomness: [u8; 32],
+) -> Result<()> {
+    let lottery = &mut ctx.accounts.lottery;
 
-    #[account(
-        mut,
-        seeds = [b"round", lottery.key().as_ref(), lottery.current_round.to_le_bytes().as_ref()],
-        bump = round.bump
-    )]
-    pub round: Account<'info, Round>,
+    require!(lottery.state == LotteryState::WaitingForRandomness, LotteryError::InvalidLotteryState);
+    require!(!lottery.randomness_fulfilled, LotteryError::RandomnessAlreadyFulfilled);
 
-    pub authority: Signer<'info>,
-}
-
-pub fn handler(ctx: Context<FulfillRandomness>, randomness: [u8; 32]) -> Result<()> {
-    let round = &mut ctx.accounts.round;
-
-    require!(round.status == RoundStatus::Drawing, crate::LotteryError::RoundNotStarted);
-    require!(round.randomness_requested, crate::LotteryError::InvalidRandomness);
-    require!(round.tickets_sold > 0, crate::LotteryError::InvalidTicketCount);
-
-    // Store the randomness
-    round.randomness = Some(randomness);
-
-    // Generate winning ticket number using the randomness
-    let random_u64 = u64::from_le_bytes([
+    // Convert randomness to winning ticket number
+    let random_number = u64::from_le_bytes([
         randomness[0], randomness[1], randomness[2], randomness[3],
         randomness[4], randomness[5], randomness[6], randomness[7],
     ]);
+    
+    let winning_ticket_number = (random_number % lottery.tickets_sold as u64) as u32;
 
-    let winning_ticket_id = (random_u64 % round.tickets_sold as u64) as u32;
-    round.winner_ticket_id = Some(winning_ticket_id);
+    lottery.winner = Some(winning_ticket_number);
+    lottery.randomness_fulfilled = true;
+    lottery.state = LotteryState::WaitingForPayout;
 
-    // Update status to finished
-    round.status = RoundStatus::Finished;
-    round.end_time = Some(Clock::get()?.unix_timestamp);
-
-    msg!("Round {} randomness fulfilled, winning ticket: {}", round.round_id, winning_ticket_id);
+    msg!("Randomness fulfilled. Winning ticket number: {}", winning_ticket_number);
 
     Ok(())
 }

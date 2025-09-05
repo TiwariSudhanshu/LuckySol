@@ -1,85 +1,52 @@
 use anchor_lang::prelude::*;
-use crate::state::*;
+use crate::contexts::Payout;
+use crate::state::LotteryState;
+use crate::errors::LotteryError;
 
-#[derive(Accounts)]
-pub struct Payout<'info> {
-    #[account(
-        mut,
-        seeds = [b"lottery", lottery.lottery_id.to_le_bytes().as_ref()],
-        bump = lottery.bump
-    )]
-    pub lottery: Account<'info, Lottery>,
+pub fn payout_handler(ctx: Context<Payout>) -> Result<()> {
+    let lottery = &mut ctx.accounts.lottery;
+    let winner_ticket = &ctx.accounts.winner_ticket;
 
-    #[account(
-        mut,
-        seeds = [b"round", lottery.key().as_ref(), round.round_id.to_le_bytes().as_ref()],
-        bump = round.bump
-    )]
-    pub round: Account<'info, Round>,
-
-    #[account(
-        mut,
-        seeds = [b"vault", lottery.key().as_ref()],
-        bump = vault_account.bump
-    )]
-    pub vault_account: Account<'info, VaultAccount>,
-
-    /// CHECK: This is the vault account for holding SOL
-    #[account(
-        mut,
-        seeds = [b"vault_sol", lottery.key().as_ref()],
-        bump
-    )]
-    pub vault: UncheckedAccount<'info>,
-
-    #[account(mut)]
-    pub winner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}
-
-pub fn handler(ctx: Context<Payout>) -> Result<()> {
-    let round = &mut ctx.accounts.round;
-    let vault_account = &mut ctx.accounts.vault_account;
-    let lottery = &ctx.accounts.lottery;
-
-    require!(round.status == RoundStatus::Finished, crate::LotteryError::RoundNotFinished);
-    require!(round.winner.is_none(), crate::LotteryError::PayoutAlreadyClaimed);
-
-    let winning_ticket_id = round.winner_ticket_id.ok_or(crate::LotteryError::NoWinner)?;
-
-    // For simplicity, we'll set the winner directly here
-    // In a real implementation, you'd verify ticket ownership through a separate account
-    
-    // Calculate payout (90% of prize pool to winner, 10% as house fee)
-    let total_prize = round.prize_amount;
-    let house_fee = total_prize / 10; // 10%
-    let winner_payout = total_prize - house_fee;
-
-    // Transfer winnings to winner
-    let lottery_key = lottery.key();
-    let vault_seeds = &[
-        b"vault_sol",
-        lottery_key.as_ref(),
-        &[ctx.bumps.vault]
-    ];
-
-    **ctx.accounts.vault.to_account_info().try_borrow_mut_lamports()? -= winner_payout;
-    **ctx.accounts.winner.to_account_info().try_borrow_mut_lamports()? += winner_payout;
-
-    // Update vault account
-    vault_account.withdraw(winner_payout)?;
-
-    // Mark winner in round
-    round.winner = Some(ctx.accounts.winner.key());
-    round.status = RoundStatus::Closed;
-
-    msg!(
-        "Payout of {} lamports sent to winner {} for round {} (ticket {})",
-        winner_payout,
-        ctx.accounts.winner.key(),
-        round.round_id,
-        winning_ticket_id
+    require!(lottery.state == LotteryState::Closed, LotteryError::InvalidLotteryState);
+    require!(lottery.winner.is_some(), LotteryError::NoWinner);
+    require!(
+        winner_ticket.ticket_number == lottery.winner.unwrap(), 
+        LotteryError::InvalidWinnerTicket
     );
+
+    let total_prize_pool = lottery.total_prize_pool;
+    
+    // Calculate distribution amounts with strict policy
+    let winner_amount = (total_prize_pool * 90) / 100;      // 90% to winner
+    let creator_amount = (total_prize_pool * 5) / 100;       // 5% to lottery creator
+    let platform_amount = total_prize_pool - winner_amount - creator_amount;  // Remaining 5% to platform
+
+    // Ensure we don't have any rounding issues
+    require!(
+        winner_amount + creator_amount + platform_amount == total_prize_pool,
+        LotteryError::InvalidPayout
+    );
+
+    // Transfer 90% to winner
+    **lottery.to_account_info().try_borrow_mut_lamports()? -= winner_amount;
+    **ctx.accounts.winner.to_account_info().try_borrow_mut_lamports()? += winner_amount;
+
+    // Transfer 5% to lottery creator
+    **lottery.to_account_info().try_borrow_mut_lamports()? -= creator_amount;
+    **ctx.accounts.lottery_creator.to_account_info().try_borrow_mut_lamports()? += creator_amount;
+
+    // Transfer 5% to platform fee account
+    **lottery.to_account_info().try_borrow_mut_lamports()? -= platform_amount;
+    **ctx.accounts.platform_fee_account.to_account_info().try_borrow_mut_lamports()? += platform_amount;
+
+    // Update lottery state
+    lottery.state = LotteryState::PaidOut;
+    lottery.total_prize_pool = 0;
+
+    msg!("Payout completed with strict 90/5/5 distribution:");
+    msg!("Winner {} received {} lamports (90%)", ctx.accounts.winner.key(), winner_amount);
+    msg!("Creator {} received {} lamports (5%)", ctx.accounts.lottery_creator.key(), creator_amount);
+    msg!("Platform {} received {} lamports (5%)", ctx.accounts.platform_fee_account.key(), platform_amount);
 
     Ok(())
 }

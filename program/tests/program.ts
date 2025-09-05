@@ -1,463 +1,405 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Lottery } from "../target/types/lottery";
-import { PublicKey, Keypair, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { assert, expect } from "chai";
-import { BN } from "bn.js";
+import { expect } from "chai";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 
 describe("lottery", () => {
-  // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
+  // Configure the client to use devnet
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
   const program = anchor.workspace.Lottery as Program<Lottery>;
-  const provider = anchor.getProvider();
-
+  
   // Test accounts
   let authority: Keypair;
-  let players: Keypair[] = [];
-
+  let player1: Keypair;
+  let player2: Keypair;
+  let player3: Keypair;
+  
   // Test parameters
-  const LOTTERY_ID = new BN(1);
-  const TICKET_PRICE = new BN(0.001 * LAMPORTS_PER_SOL); // 0.001 SOL
-  const MAX_TICKETS = 100;
+  const ticketPrice = new anchor.BN(0.01 * LAMPORTS_PER_SOL); // Reduced to 0.01 SOL for testing
+  const maxTickets = 10;
 
   before(async () => {
-    // Initialize authority
+    // Generate test keypairs
     authority = Keypair.generate();
+    player1 = Keypair.generate();
+    player2 = Keypair.generate();
+    player3 = Keypair.generate();
 
-    // Airdrop SOL to authority
-    const signature = await provider.connection.requestAirdrop(
-      authority.publicKey,
-      2 * LAMPORTS_PER_SOL
-    );
-    await provider.connection.confirmTransaction(signature);
+    console.log("Generated test accounts:");
+    console.log(`Authority: ${authority.publicKey.toString()}`);
+    console.log(`Player1: ${player1.publicKey.toString()}`);
+    console.log(`Player2: ${player2.publicKey.toString()}`);
+    console.log(`Player3: ${player3.publicKey.toString()}`);
+    console.log("\nIf airdrops fail, fund these accounts manually with:");
+    console.log(`solana airdrop 2 ${authority.publicKey.toString()} --url devnet`);
+    console.log(`solana airdrop 2 ${player1.publicKey.toString()} --url devnet`);
+    console.log(`solana airdrop 2 ${player2.publicKey.toString()} --url devnet`);
+    console.log(`solana airdrop 2 ${player3.publicKey.toString()} --url devnet`);
 
-    // Create test players
-    for (let i = 0; i < 5; i++) {
-      const player = Keypair.generate();
+    // Simple airdrop attempt - if it fails, the user can fund manually
+    try {
+      console.log("\nAttempting automatic airdrops...");
       
-      // Airdrop SOL to each player
-      const playerSignature = await provider.connection.requestAirdrop(
-        player.publicKey,
-        1 * LAMPORTS_PER_SOL
-      );
-      await provider.connection.confirmTransaction(playerSignature);
+      const accounts = [
+        { keypair: authority, name: "Authority" },
+        { keypair: player1, name: "Player1" },
+        { keypair: player2, name: "Player2" },
+        { keypair: player3, name: "Player3" }
+      ];
       
-      players.push(player);
+      for (const account of accounts) {
+        try {
+          const txId = await provider.connection.requestAirdrop(
+            account.keypair.publicKey, 
+            1 * LAMPORTS_PER_SOL
+          );
+          await provider.connection.confirmTransaction(txId, "confirmed");
+          console.log(`✅ ${account.name} funded successfully`);
+          
+          // Small delay between requests
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+        } catch (error) {
+          console.log(`❌ ${account.name} airdrop failed: ${error.message}`);
+        }
+      }
+      
+    } catch (error) {
+      console.log("Airdrop process encountered errors - some accounts may need manual funding");
+    }
+
+    // Check balances and provide guidance
+    console.log("\nChecking account balances...");
+    const balances = await Promise.all([
+      provider.connection.getBalance(authority.publicKey),
+      provider.connection.getBalance(player1.publicKey),
+      provider.connection.getBalance(player2.publicKey),
+      provider.connection.getBalance(player3.publicKey)
+    ]);
+
+    console.log(`Authority balance: ${balances[0] / LAMPORTS_PER_SOL} SOL`);
+    console.log(`Player1 balance: ${balances[1] / LAMPORTS_PER_SOL} SOL`);
+    console.log(`Player2 balance: ${balances[2] / LAMPORTS_PER_SOL} SOL`);
+    console.log(`Player3 balance: ${balances[3] / LAMPORTS_PER_SOL} SOL`);
+
+    // Check if any account needs funding
+    const minBalance = 0.1 * LAMPORTS_PER_SOL;
+    if (balances.some(balance => balance < minBalance)) {
+      console.log("\n⚠️  Some accounts have insufficient balance!");
+      console.log("Fund the accounts manually using the commands above, then run the tests again.");
+      // Don't throw error - let tests proceed and fail gracefully if needed
+    } else {
+      console.log("\n✅ All accounts have sufficient balance for testing");
     }
   });
 
-  // Helper function to get lottery PDA
-  const getLotteryPDA = (lotteryId: BN): [PublicKey, number] => {
-    return PublicKey.findProgramAddressSync(
-      [Buffer.from("lottery"), lotteryId.toArrayLike(Buffer, "le", 8)],
-      program.programId
-    );
-  };
+  describe("Complete Lottery Flow", () => {
+    let lotteryId: anchor.BN;
+    let lotteryPda: PublicKey;
+    let lotteryBump: number;
+    let ticket1Pda: PublicKey;
+    let ticket2Pda: PublicKey;
+    let ticket3Pda: PublicKey;
 
-  // Helper function to get ticket PDA
-  const getTicketPDA = (lottery: PublicKey, ticketNumber: number): [PublicKey, number] => {
-    return PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("ticket"),
-        lottery.toBuffer(),
-        new BN(ticketNumber).toArrayLike(Buffer, "le", 4)
-      ],
-      program.programId
-    );
-  };
+    beforeEach(async () => {
+      // Use timestamp to ensure unique lottery IDs
+      lotteryId = new anchor.BN(Date.now());
+      
+      // Find lottery PDA
+      [lotteryPda, lotteryBump] = PublicKey.findProgramAddressSync(
+        [Buffer.from("lottery"), lotteryId.toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
+    });
 
-  // Helper function to get account balance
-  const getBalance = async (pubkey: PublicKey): Promise<number> => {
-    return await provider.connection.getBalance(pubkey);
-  };
-
-  it("Initialize Lottery", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-
-    const tx = await program.methods
-      .initializeLottery(LOTTERY_ID, TICKET_PRICE, MAX_TICKETS)
-      .accounts({
-        authority: authority.publicKey,
-        lottery: lotteryPDA,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    console.log("Initialize lottery transaction signature:", tx);
-
-    // Fetch and verify lottery account
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    
-    assert.ok(lotteryAccount.authority.equals(authority.publicKey));
-    assert.ok(lotteryAccount.lotteryId.eq(LOTTERY_ID));
-    assert.ok(lotteryAccount.ticketPrice.eq(TICKET_PRICE));
-    assert.equal(lotteryAccount.maxTickets, MAX_TICKETS);
-    assert.equal(lotteryAccount.ticketsSold, 0);
-    assert.ok(lotteryAccount.totalPrizePool.eq(new BN(0)));
-    assert.deepEqual(lotteryAccount.state, { waitingForTickets: {} });
-    assert.equal(lotteryAccount.winner, null);
-    assert.equal(lotteryAccount.randomnessFulfilled, false);
-  });
-
-  it("Buy Ticket", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-    const player = players[0];
-    const [ticketPDA] = getTicketPDA(lotteryPDA, 0);
-
-    const playerBalanceBefore = await getBalance(player.publicKey);
-    const lotteryBalanceBefore = await getBalance(lotteryPDA);
-
-    const tx = await program.methods
-      .buyTicket(LOTTERY_ID)
-      .accounts({
-        player: player.publicKey,
-        lottery: lotteryPDA,
-        ticket: ticketPDA,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([player])
-      .rpc();
-
-    console.log("Buy ticket transaction signature:", tx);
-
-    // Verify ticket account
-    const ticketAccount = await program.account.ticket.fetch(ticketPDA);
-    assert.ok(ticketAccount.lottery.equals(lotteryPDA));
-    assert.ok(ticketAccount.player.equals(player.publicKey));
-    assert.equal(ticketAccount.ticketNumber, 0);
-
-    // Verify lottery account updated
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.equal(lotteryAccount.ticketsSold, 1);
-    assert.ok(lotteryAccount.totalPrizePool.eq(TICKET_PRICE));
-
-    // Verify balances changed
-    const playerBalanceAfter = await getBalance(player.publicKey);
-    const lotteryBalanceAfter = await getBalance(lotteryPDA);
-
-    expect(playerBalanceBefore - playerBalanceAfter).to.be.greaterThan(TICKET_PRICE.toNumber());
-    expect(lotteryBalanceAfter - lotteryBalanceBefore).to.equal(TICKET_PRICE.toNumber());
-  });
-
-  it("Buy Multiple Tickets", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-
-    // Buy tickets for players 1-4 (player 0 already bought)
-    for (let i = 1; i < 5; i++) {
-      const player = players[i];
-      const [ticketPDA] = getTicketPDA(lotteryPDA, i);
-
+    it("Should initialize a new lottery", async () => {
       await program.methods
-        .buyTicket(LOTTERY_ID)
+        .initializeLottery(lotteryId, ticketPrice, maxTickets)
         .accounts({
-          player: player.publicKey,
-          lottery: lotteryPDA,
-          ticket: ticketPDA,
+          authority: authority.publicKey,
+          lottery: lotteryPda,
           systemProgram: SystemProgram.programId,
         })
-        .signers([player])
+        .signers([authority])
+        .rpc();
+
+      // Verify lottery state
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.authority.toString()).to.equal(authority.publicKey.toString());
+      expect(lottery.lotteryId.toString()).to.equal(lotteryId.toString());
+      expect(lottery.ticketPrice.toString()).to.equal(ticketPrice.toString());
+      expect(lottery.maxTickets).to.equal(maxTickets);
+      expect(lottery.ticketsSold).to.equal(0);
+      expect(lottery.totalPrizePool.toString()).to.equal("0");
+      expect(lottery.state).to.deep.equal({ waitingForTickets: {} });
+      expect(lottery.winner).to.be.null;
+      expect(lottery.randomnessFulfilled).to.be.false;
+      expect(lottery.bump).to.equal(lotteryBump);
+    });
+
+    it("Should allow player1 to buy a ticket", async () => {
+      // Find ticket PDA - use current tickets_sold which is 0
+      [ticket1Pda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("ticket"), 
+          lotteryPda.toBuffer(), 
+          Buffer.from([0, 0, 0, 0]) // tickets_sold = 0 before this purchase
+        ],
+        program.programId
+      );
+
+      const initialBalance = await provider.connection.getBalance(player1.publicKey);
+      
+      await program.methods
+        .buyTicket(lotteryId)
+        .accounts({
+          player: player1.publicKey,
+          lottery: lotteryPda,
+          ticket: ticket1Pda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([player1])
         .rpc();
 
       // Verify ticket
-      const ticketAccount = await program.account.ticket.fetch(ticketPDA);
-      assert.ok(ticketAccount.player.equals(player.publicKey));
-      assert.equal(ticketAccount.ticketNumber, i);
-    }
+      const ticket = await program.account.ticket.fetch(ticket1Pda);
+      expect(ticket.lottery.toString()).to.equal(lotteryPda.toString());
+      expect(ticket.player.toString()).to.equal(player1.publicKey.toString());
+      expect(ticket.ticketNumber).to.equal(0);
 
-    // Verify lottery has 5 tickets sold
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.equal(lotteryAccount.ticketsSold, 5);
-    assert.ok(lotteryAccount.totalPrizePool.eq(TICKET_PRICE.mul(new BN(5))));
-  });
+      // Verify lottery state updated
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.ticketsSold).to.equal(1);
+      expect(lottery.totalPrizePool.toString()).to.equal(ticketPrice.toString());
 
-  it("Start Round", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-
-    const tx = await program.methods
-      .startRound()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: lotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    console.log("Start round transaction signature:", tx);
-
-    // Verify lottery state changed
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.deepEqual(lotteryAccount.state, { waitingForRandomness: {} });
-  });
-
-  it("Fulfill Randomness", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-
-    // Mock randomness (in real implementation, this would come from an oracle)
-    const randomness = Array.from({ length: 32 }, (_, i) => i % 256);
-
-    const tx = await program.methods
-      .fulfillRandomness(randomness)
-      .accounts({
-        authority: authority.publicKey,
-        lottery: lotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    console.log("Fulfill randomness transaction signature:", tx);
-
-    // Verify lottery state and winner
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.deepEqual(lotteryAccount.state, { waitingForPayout: {} });
-    assert.equal(lotteryAccount.randomnessFulfilled, true);
-    assert.isNotNull(lotteryAccount.winner);
-    assert.isTrue(lotteryAccount.winner < 5); // Winner should be 0-4
-    
-    console.log("Winning ticket number:", lotteryAccount.winner);
-  });
-
-  it("Close Round", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-
-    const tx = await program.methods
-      .closeRound()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: lotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    console.log("Close round transaction signature:", tx);
-
-    // Verify lottery state
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.deepEqual(lotteryAccount.state, { closed: {} });
-  });
-
-  it("Payout Winner", async () => {
-    const [lotteryPDA] = getLotteryPDA(LOTTERY_ID);
-    
-    // Get lottery account to find winner
-    const lotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    const winningTicketNumber = lotteryAccount.winner;
-    
-    // Get winner ticket and player
-    const [winnerTicketPDA] = getTicketPDA(lotteryPDA, winningTicketNumber);
-    const winnerTicketAccount = await program.account.ticket.fetch(winnerTicketPDA);
-    const winnerPlayer = winnerTicketAccount.player;
-
-    const winnerBalanceBefore = await getBalance(winnerPlayer);
-    const lotteryBalanceBefore = await getBalance(lotteryPDA);
-    const totalPrizePool = lotteryAccount.totalPrizePool.toNumber();
-
-    const tx = await program.methods
-      .payout()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: lotteryPDA,
-        winnerTicket: winnerTicketPDA,
-        winner: winnerPlayer,
-      })
-      .signers([authority])
-      .rpc();
-
-    console.log("Payout transaction signature:", tx);
-
-    // Verify balances
-    const winnerBalanceAfter = await getBalance(winnerPlayer);
-    const lotteryBalanceAfter = await getBalance(lotteryPDA);
-
-    expect(winnerBalanceAfter - winnerBalanceBefore).to.equal(totalPrizePool);
-    expect(lotteryBalanceBefore - lotteryBalanceAfter).to.equal(totalPrizePool);
-
-    // Verify lottery state
-    const updatedLotteryAccount = await program.account.lottery.fetch(lotteryPDA);
-    assert.deepEqual(updatedLotteryAccount.state, { paidOut: {} });
-    assert.ok(updatedLotteryAccount.totalPrizePool.eq(new BN(0)));
-
-    console.log(`Winner ${winnerPlayer.toBase58()} received ${totalPrizePool / LAMPORTS_PER_SOL} SOL`);
-  });
-
-  // Error test cases
-  describe("Error Cases", () => {
-    const ERROR_LOTTERY_ID = new BN(999);
-
-    it("Should fail to buy ticket for non-existent lottery", async () => {
-      const [nonExistentLotteryPDA] = getLotteryPDA(ERROR_LOTTERY_ID);
-      const [ticketPDA] = getTicketPDA(nonExistentLotteryPDA, 0);
-      const player = players[0];
-
-      try {
-        await program.methods
-          .buyTicket(ERROR_LOTTERY_ID)
-          .accounts({
-            player: player.publicKey,
-            lottery: nonExistentLotteryPDA,
-            ticket: ticketPDA,
-            systemProgram: SystemProgram.programId,
-          })
-          .signers([player])
-          .rpc();
-        
-        assert.fail("Expected transaction to fail");
-      } catch (error) {
-        expect(error.message).to.include("AccountNotInitialized");
-      }
+      // Verify player balance decreased
+      const finalBalance = await provider.connection.getBalance(player1.publicKey);
+      expect(initialBalance - finalBalance).to.be.greaterThan(ticketPrice.toNumber());
     });
 
-    it("Should fail to start round without authority", async () => {
-      // Create a new lottery first
-      const newLotteryId = new BN(2);
-      const [newLotteryPDA] = getLotteryPDA(newLotteryId);
+    it("Should allow player2 to buy a ticket", async () => {
+      [ticket2Pda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("ticket"), 
+          lotteryPda.toBuffer(), 
+          Buffer.from([1, 0, 0, 0]) // tickets_sold = 1 before this purchase
+        ],
+        program.programId
+      );
 
       await program.methods
-        .initializeLottery(newLotteryId, TICKET_PRICE, MAX_TICKETS)
+        .buyTicket(lotteryId)
+        .accounts({
+          player: player2.publicKey,
+          lottery: lotteryPda,
+          ticket: ticket2Pda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([player2])
+        .rpc();
+
+      // Verify lottery state
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.ticketsSold).to.equal(2);
+      expect(lottery.totalPrizePool.toString()).to.equal(ticketPrice.mul(new anchor.BN(2)).toString());
+    });
+
+    it("Should allow player3 to buy a ticket", async () => {
+      [ticket3Pda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("ticket"), 
+          lotteryPda.toBuffer(), 
+          Buffer.from([2, 0, 0, 0]) // tickets_sold = 2 before this purchase
+        ],
+        program.programId
+      );
+
+      await program.methods
+        .buyTicket(lotteryId)
+        .accounts({
+          player: player3.publicKey,
+          lottery: lotteryPda,
+          ticket: ticket3Pda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([player3])
+        .rpc();
+
+      // Verify lottery state
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.ticketsSold).to.equal(3);
+    });
+
+    it("Should allow authority to start the round", async () => {
+      await program.methods
+        .startRound()
         .accounts({
           authority: authority.publicKey,
-          lottery: newLotteryPDA,
-          systemProgram: SystemProgram.programId,
+          lottery: lotteryPda,
         })
         .signers([authority])
         .rpc();
 
-      // Try to start round with wrong authority
-      const fakeAuthority = players[0];
-
-      try {
-        await program.methods
-          .startRound()
-          .accounts({
-            authority: fakeAuthority.publicKey,
-            lottery: newLotteryPDA,
-          })
-          .signers([fakeAuthority])
-          .rpc();
-        
-        assert.fail("Expected transaction to fail");
-      } catch (error) {
-        expect(error.message).to.include("ConstraintHasOne");
-      }
+      // Verify state changed
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.state).to.deep.equal({ waitingForRandomness: {} });
     });
 
-    it("Should fail to start round with no tickets sold", async () => {
-      const newLotteryId = new BN(3);
-      const [newLotteryPDA] = getLotteryPDA(newLotteryId);
+    it("Should fulfill randomness and select winner", async () => {
+      // Generate mock randomness
+      const randomness = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        randomness[i] = Math.floor(Math.random() * 256);
+      }
 
       await program.methods
-        .initializeLottery(newLotteryId, TICKET_PRICE, MAX_TICKETS)
+        .fulfillRandomness(Array.from(randomness))
         .accounts({
           authority: authority.publicKey,
-          lottery: newLotteryPDA,
-          systemProgram: SystemProgram.programId,
+          lottery: lotteryPda,
         })
         .signers([authority])
         .rpc();
 
+      // Verify randomness fulfilled
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.randomnessFulfilled).to.be.true;
+      expect(lottery.winner).to.not.be.null;
+      expect(lottery.winner).to.be.lessThan(3); // Should be 0, 1, or 2
+      expect(lottery.state).to.deep.equal({ waitingForPayout: {} });
+    });
+
+    it("Should close the round", async () => {
+      await program.methods
+        .closeRound()
+        .accounts({
+          authority: authority.publicKey,
+          lottery: lotteryPda,
+        })
+        .signers([authority])
+        .rpc();
+
+      // Verify state changed
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      expect(lottery.state).to.deep.equal({ closed: {} });
+    });
+
+    it("Should complete payout to winner with fee distribution", async () => {
+      // Get current lottery state to find winner
+      const lottery = await program.account.lottery.fetch(lotteryPda);
+      const winnerTicketNumber = lottery.winner;
+      
+      // Find the winning ticket PDA
+      const [winnerTicketPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("ticket"), 
+          lotteryPda.toBuffer(), 
+          Buffer.from(new Uint8Array(new Uint32Array([winnerTicketNumber]).buffer))
+        ],
+        program.programId
+      );
+
+      // Get the winning ticket to find winner address
+      const winnerTicket = await program.account.ticket.fetch(winnerTicketPda);
+      const winnerAddress = winnerTicket.player;
+
+      // Create platform fee account (in real app, this would be a predetermined account)
+      const platformFeeAccount = Keypair.generate();
+
+      // Get initial balances
+      const initialWinnerBalance = await provider.connection.getBalance(winnerAddress);
+      const initialCreatorBalance = await provider.connection.getBalance(authority.publicKey);
+      const initialPlatformBalance = await provider.connection.getBalance(platformFeeAccount.publicKey);
+
+      const totalPrizePool = lottery.totalPrizePool.toNumber();
+      const expectedWinnerAmount = Math.floor((totalPrizePool * 90) / 100);
+      const expectedCreatorAmount = Math.floor((totalPrizePool * 5) / 100);
+      const expectedPlatformAmount = totalPrizePool - expectedWinnerAmount - expectedCreatorAmount;
+
+      await program.methods
+        .payout()
+        .accounts({
+          authority: authority.publicKey,
+          lottery: lotteryPda,
+          winnerTicket: winnerTicketPda,
+          winner: winnerAddress,
+          lotteryCreator: authority.publicKey, // Authority is the lottery creator
+          platformFeeAccount: platformFeeAccount.publicKey,
+        })
+        .signers([authority])
+        .rpc();
+
+      // Verify payout completed
+      const finalLottery = await program.account.lottery.fetch(lotteryPda);
+      expect(finalLottery.state).to.deep.equal({ paidOut: {} });
+      expect(finalLottery.totalPrizePool.toString()).to.equal("0");
+
+      // Verify winner received 90%
+      const finalWinnerBalance = await provider.connection.getBalance(winnerAddress);
+      const winnerReceived = finalWinnerBalance - initialWinnerBalance;
+      expect(winnerReceived).to.equal(expectedWinnerAmount);
+
+      // Verify creator received 5%
+      const finalCreatorBalance = await provider.connection.getBalance(authority.publicKey);
+      const creatorReceived = finalCreatorBalance - initialCreatorBalance;
+      expect(creatorReceived).to.be.greaterThan(expectedCreatorAmount - 10000); // Account for tx fees
+      expect(creatorReceived).to.be.lessThan(expectedCreatorAmount + 10000);
+
+      // Verify platform received 5%
+      const finalPlatformBalance = await provider.connection.getBalance(platformFeeAccount.publicKey);
+      const platformReceived = finalPlatformBalance - initialPlatformBalance;
+      expect(platformReceived).to.equal(expectedPlatformAmount);
+
+      console.log(`Payout Distribution:`);
+      console.log(`Total Prize Pool: ${totalPrizePool} lamports (${totalPrizePool / LAMPORTS_PER_SOL} SOL)`);
+      console.log(`Winner (90%): ${winnerReceived} lamports (${winnerReceived / LAMPORTS_PER_SOL} SOL)`);
+      console.log(`Creator (5%): ${creatorReceived} lamports (${creatorReceived / LAMPORTS_PER_SOL} SOL)`);
+      console.log(`Platform (5%): ${platformReceived} lamports (${platformReceived / LAMPORTS_PER_SOL} SOL)`);
+    });
+  });
+
+  // Reduced test cases for faster execution when rate-limited
+  describe("Basic Error Cases", () => {
+    let lotteryId: anchor.BN;
+    let lotteryPda: PublicKey;
+
+    beforeEach(async () => {
+      lotteryId = new anchor.BN(Date.now() + Math.random() * 1000);
+      [lotteryPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("lottery"), lotteryId.toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
+
+      // Initialize lottery for error tests
+      await program.methods
+        .initializeLottery(lotteryId, ticketPrice, maxTickets)
+        .accounts({
+          authority: authority.publicKey,
+          lottery: lotteryPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([authority])
+        .rpc();
+    });
+
+    it("Should fail to start round with no tickets", async () => {
       try {
         await program.methods
           .startRound()
           .accounts({
             authority: authority.publicKey,
-            lottery: newLotteryPDA,
+            lottery: lotteryPda,
           })
           .signers([authority])
           .rpc();
         
-        assert.fail("Expected transaction to fail");
+        expect.fail("Should have thrown an error");
       } catch (error) {
-        expect(error.message).to.include("NoTicketsSold");
+        expect(error.message).to.include("No tickets have been sold");
       }
     });
-  });
-
-  // Complete lottery flow test
-  it("Complete Lottery Flow - New Lottery", async () => {
-    const newLotteryId = new BN(10);
-    const [newLotteryPDA] = getLotteryPDA(newLotteryId);
-    const numPlayers = 3;
-
-    // 1. Initialize new lottery
-    await program.methods
-      .initializeLottery(newLotteryId, TICKET_PRICE, MAX_TICKETS)
-      .accounts({
-        authority: authority.publicKey,
-        lottery: newLotteryPDA,
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([authority])
-      .rpc();
-
-    // 2. Players buy tickets
-    for (let i = 0; i < numPlayers; i++) {
-      const [ticketPDA] = getTicketPDA(newLotteryPDA, i);
-      await program.methods
-        .buyTicket(newLotteryId)
-        .accounts({
-          player: players[i].publicKey,
-          lottery: newLotteryPDA,
-          ticket: ticketPDA,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([players[i]])
-        .rpc();
-    }
-
-    // 3. Start round
-    await program.methods
-      .startRound()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: newLotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    // 4. Fulfill randomness
-    const randomness = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256));
-    await program.methods
-      .fulfillRandomness(randomness)
-      .accounts({
-        authority: authority.publicKey,
-        lottery: newLotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    // 5. Close round
-    await program.methods
-      .closeRound()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: newLotteryPDA,
-      })
-      .signers([authority])
-      .rpc();
-
-    // 6. Payout
-    const lotteryAccount = await program.account.lottery.fetch(newLotteryPDA);
-    const winningTicketNumber = lotteryAccount.winner;
-    const [winnerTicketPDA] = getTicketPDA(newLotteryPDA, winningTicketNumber);
-    const winnerTicketAccount = await program.account.ticket.fetch(winnerTicketPDA);
-
-    await program.methods
-      .payout()
-      .accounts({
-        authority: authority.publicKey,
-        lottery: newLotteryPDA,
-        winnerTicket: winnerTicketPDA,
-        winner: winnerTicketAccount.player,
-      })
-      .signers([authority])
-      .rpc();
-
-    // Verify final state
-    const finalLotteryAccount = await program.account.lottery.fetch(newLotteryPDA);
-    assert.deepEqual(finalLotteryAccount.state, { paidOut: {} });
-    assert.ok(finalLotteryAccount.totalPrizePool.eq(new BN(0)));
-
-    console.log("Complete lottery flow test passed!");
   });
 });

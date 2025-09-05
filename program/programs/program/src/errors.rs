@@ -2,26 +2,33 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum LotteryError {
+    #[msg("Invalid lottery ID")]
+    InvalidLotteryId,
+    
     #[msg("Lottery is not active")]
     LotteryNotActive,
+    
     #[msg("Lottery is full")]
     LotteryFull,
-    #[msg("Insufficient funds")]
-    InsufficientFunds,
-    #[msg("Round not started")]
-    RoundNotStarted,
-    #[msg("Round already started")]
-    RoundAlreadyStarted,
-    #[msg("Round not finished")]
-    RoundNotFinished,
-    #[msg("No winner found")]
+    
+    #[msg("Invalid lottery state")]
+    InvalidLotteryState,
+    
+    #[msg("No tickets have been sold")]
+    NoTicketsSold,
+    
+    #[msg("Randomness already fulfilled")]
+    RandomnessAlreadyFulfilled,
+    
+    #[msg("Randomness not fulfilled")]
+    RandomnessNotFulfilled,
+    
+    #[msg("No winner determined")]
     NoWinner,
-    #[msg("Invalid randomness")]
-    InvalidRandomness,
-    #[msg("Unauthorized")]
-    Unauthorized,
-    #[msg("Invalid ticket count")]
-    InvalidTicketCount,
-    #[msg("Payout already claimed")]
-    PayoutAlreadyClaimed,
+    
+    #[msg("Invalid winner ticket")]
+    InvalidWinnerTicket,
+    
+    #[msg("Invalid payout calculation")]
+    InvalidPayout,
 }

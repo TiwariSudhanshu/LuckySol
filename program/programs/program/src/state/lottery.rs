@@ -1,35 +1,40 @@
-// use anchor_lang::prelude::*;
-
-// #[account]
-// pub struct Lottery{
-//     pub admin: Pubkey,
-//     pub ticket_price: u64,
-//     pub current_round: u64,
-//     pub bump: u8,
-// }
-
 use anchor_lang::prelude::*;
 
 #[account]
 pub struct Lottery {
-    pub lottery_id: u64,
     pub authority: Pubkey,
+    pub lottery_id: u64,
     pub ticket_price: u64,
     pub max_tickets: u32,
-    pub current_round: u64,
-    pub is_active: bool,
+    pub tickets_sold: u32,
     pub total_prize_pool: u64,
+    pub state: LotteryState,
+    pub winner: Option<u32>,
+    pub created_at: i64,
+    pub randomness_fulfilled: bool,
     pub bump: u8,
 }
 
-impl Lottery {
-    pub const SPACE: usize = 8 + // discriminator
-        8 + // lottery_id
+impl Space for Lottery {
+    const INIT_SPACE: usize = 8 + // discriminator
         32 + // authority
-        8 + // ticket_price
-        4 + // max_tickets
-        8 + // current_round
-        1 + // is_active
-        8 + // total_prize_pool
-        1; // bump
+        8 +  // lottery_id
+        8 +  // ticket_price
+        4 +  // max_tickets
+        4 +  // tickets_sold
+        8 +  // total_prize_pool
+        1 +  // state
+        1 + 4 + // winner (Option<u32>)
+        8 +  // created_at
+        1 +  // randomness_fulfilled
+        1;   // bump
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum LotteryState {
+    WaitingForTickets,
+    WaitingForRandomness,
+    WaitingForPayout,
+    Closed,
+    PaidOut,
 }
