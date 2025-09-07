@@ -3,8 +3,11 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
+import { useProgram } from "@/lib/useProgram"
 
 export default function DashboardPage() {
+  const program = useProgram();
+  console.log("Program:", program?.account);
   return (
     <>
       <main className="relative min-h-dvh bg-black text-white font-sans">
