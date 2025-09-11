@@ -1,22 +1,43 @@
 "use client"
 
+import generateLotteryId from "@/lib/generateLotteryId"
+import { createLottery } from "@/lib/transactions"
+import { useProgram } from "@/lib/useProgram"
+import { useAnchorWallet } from "@solana/wallet-adapter-react"
 import type React from "react"
 import { useState } from "react"
+import { toast } from "sonner"
 
 export default function CreateLottery() {
   const [ticketPrice, setTicketPrice] = useState("")
   const [maxTickets, setMaxTickets] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-
+  const program = useProgram();
+  const wallet = useAnchorWallet();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const lotteryId = generateLotteryId();
 
-    console.log("Creating lottery with:", { ticketPrice, maxTickets })
+    console.log("Creating lottery with:", {lotteryId, ticketPrice, maxTickets })
+
+  try{
+    if (!program || !wallet) {
+  toast.error("Wallet or program not ready");
+  return;
+}
+    const tx = await createLottery(lotteryId,Number(ticketPrice),Number(maxTickets),program,wallet);
+    if(tx){
+      console.log("Transaction sent : ", tx);
+      toast.success("Transaction successfull");
+    } 
+  }catch(error){
+    console.log("Error creating lottery:", error);
+    toast.error("Error")
+  }finally{
     setIsLoading(false)
+  }
   }
 
   return (

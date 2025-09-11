@@ -4,7 +4,10 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { useProgram } from "@/lib/useProgram"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useAnchorWallet } from "@solana/wallet-adapter-react"
+import { getAllLotteries } from "@/lib/transactions"
+import { toast } from "sonner"
 
 const sampleLotteries = {
   explore: [
@@ -73,9 +76,23 @@ const sampleLotteries = {
 }
 
 export default function DashboardPage() {
-  const program = useProgram()
+  const program = useProgram();
+  const fetchlotteries = async () => {
+    try {
+      if(!program){
+        toast.error("Program not initialized")
+        return
+      }
+      const data = await getAllLotteries(program);
+      console.log("Fetched lotteries:", data);
+      toast.success("Lotteries fetched, check console")
+    } catch (error) {
+      toast.error("Error fetching lotteries")
+      console.log("Error fetching lotteries:", error);
+    }
+  }
+
   const [activeTab, setActiveTab] = useState("explore")
-  console.log("Program:", program?.account)
 
   const renderLotteryCard = (lottery: any, type: string) => (
     <div

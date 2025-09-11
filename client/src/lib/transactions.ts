@@ -1,17 +1,25 @@
 import { useProgram } from "./useProgram";
 import * as anchor from "@coral-xyz/anchor";
+import { AnchorWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
+
 
 export const createLottery = async (  
   lotteryId: number,
   ticketPrice: number,
   maxTickets: number,
-  wallet: anchor.Wallet
+  program: anchor.Program,   
+  wallet: AnchorWallet
 ) => {
-  const program = useProgram();
+
 
   if (!program) {
     console.log("Program not initialized");
+    return;
+  }
+
+  if(!wallet){
+    console.log("No wallet found");
     return;
   }
 
@@ -49,8 +57,8 @@ program.programId
 
 }
 
-export const getAllLotteries = async () => {
-  const program = useProgram();
+export const getAllLotteries = async (  program: anchor.Program) => {
+
 
   if (!program) {
     console.log("Program not initialized");
