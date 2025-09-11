@@ -5,16 +5,11 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { useProgram } from "@/lib/useProgram"
 import { useEffect, useState } from "react"
-import { useAnchorWallet } from "@solana/wallet-adapter-react"
 import { getAllLotteries } from "@/lib/transactions"
 import { toast } from "sonner"
+import { PublicKey } from "@solana/web3.js"
 
 const sampleLotteries = {
-  explore: [
-    { id: 129, name: "Daily Draw", prize: "720.00 SOL", endsIn: "01:22:15", ticketsSold: "1,840", status: "Live" },
-    { id: 130, name: "Mega Pool", prize: "3,450.00 SOL", endsIn: "05:09:41", ticketsSold: "7,215", status: "Live" },
-    { id: 131, name: "Weekend Special", prize: "980.00 SOL", endsIn: "12:44:03", ticketsSold: "2,067", status: "Live" },
-  ],
   bought: [
     {
       id: 125,
@@ -76,21 +71,63 @@ const sampleLotteries = {
 }
 
 export default function DashboardPage() {
-  const program = useProgram();
+  const program = useProgram()
+  const [exploreLotteries, setExploreLotteries] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
   const fetchlotteries = async () => {
     try {
-      if(!program){
+      if (!program) {
         toast.error("Program not initialized")
         return
       }
-      const data = await getAllLotteries(program);
-      console.log("Fetched lotteries:", data);
-      toast.success("Lotteries fetched, check console")
+      setLoading(true)
+      const data = await getAllLotteries(program)
+      console.log("Fetched lotteries:", data)
+
+      const transformedLotteries = await Promise.all(
+        data.map(async (lotteryData: any, index: number) => {
+          try {
+            const lottery = await (program.account as any).lottery.fetch(new PublicKey(lotteryData.id))
+            console.log(`Fetched lottery ${index}:`, lottery)
+
+            return {
+              id: lotteryData.id,
+              name: `Lottery #${index + 1}`,
+              prize: `${(lottery.totalPrizePool?.toNumber() || 0) / 1000000000} SOL`,
+              endsIn: "24:00:00",
+              ticketsSold: lottery.ticketsSold?.toString() || "0",
+              status: "Open",
+              maxTickets: lottery.maxTickets?.toString() || "0",
+            }
+          } catch (error) {
+            console.error(`Error fetching lottery ${index}:`, error)
+            return {
+              id: lotteryData.id,
+              name: `Lottery #${index + 1}`,
+              prize: "0 SOL",
+              endsIn: "24:00:00",
+              ticketsSold: "0",
+              status: "Open",
+              maxTickets: "0",
+            }
+          }
+        }),
+      )
+
+      setExploreLotteries(transformedLotteries)
+      toast.success("Lotteries fetched successfully")
     } catch (error) {
       toast.error("Error fetching lotteries")
-      console.log("Error fetching lotteries:", error);
+      console.log("Error fetching lotteries:", error)
+    } finally {
+      setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchlotteries()
+  }, [program])
 
   const [activeTab, setActiveTab] = useState("explore")
 
@@ -102,11 +139,13 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-white">{lottery.name}</h3>
-          <p className="mt-0.5 text-xs text-zinc-400">Round #{lottery.id}</p>
+          <p className="mt-0.5 text-xs text-zinc-400">
+            {type === "explore" ? `Max Tickets: ${lottery.maxTickets}` : `Round #${lottery.id}`}
+          </p>
         </div>
         <span
           className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-            lottery.status === "Live"
+            lottery.status === "Live" || lottery.status === "Open"
               ? "border-lime-500/30 bg-lime-900 text-white"
               : "border-zinc-500/30 bg-zinc-500/10 text-zinc-400"
           }`}
@@ -121,7 +160,9 @@ export default function DashboardPage() {
           <dd className="mt-0.5 font-semibold text-white">{lottery.prize}</dd>
         </div>
         <div>
-          <dt className="text-zinc-400">{lottery.status === "Live" ? "Ends In" : "Status"}</dt>
+          <dt className="text-zinc-400">
+            {lottery.status === "Live" || lottery.status === "Open" ? "Ends In" : "Status"}
+          </dt>
           <dd className="mt-0.5 font-semibold text-white">{lottery.endsIn}</dd>
         </div>
         <div>
@@ -137,21 +178,25 @@ export default function DashboardPage() {
         {type !== "bought" && (
           <div>
             <dt className="text-zinc-400">Status</dt>
-            <dd className="mt-0.5 text-white">{lottery.status === "Live" ? "Open" : "Closed"}</dd>
+            <dd className="mt-0.5 text-white">
+              {lottery.status === "Live" || lottery.status === "Open" ? "Open" : "Closed"}
+            </dd>
           </div>
         )}
       </dl>
 
       <div className="mt-5 flex items-center justify-between">
         <p className="text-xs text-zinc-500">
-          {type === "explore" && lottery.status === "Live" && "Join before the timer ends."}
+          {type === "explore" &&
+            (lottery.status === "Live" || lottery.status === "Open") &&
+            "Join before the timer ends."}
           {type === "bought" && lottery.status === "Live" && "You have tickets in this draw."}
           {type === "bought" && lottery.status === "Completed" && "Draw completed."}
           {type === "created" && lottery.creator && "You created this lottery."}
         </p>
-        {type === "explore" && lottery.status === "Live" && (
+        {type === "explore" && (lottery.status === "Live" || lottery.status === "Open") && (
           <Link
-            href="/buy-tickets"
+            href={`/lottery/${lottery.id}`}
             className="rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
           >
             Join Now
@@ -253,8 +298,21 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {activeTab === "explore" &&
-                sampleLotteries.explore.map((lottery) => renderLotteryCard(lottery, "explore"))}
+              {activeTab === "explore" && (
+                <>
+                  {loading ? (
+                    <div className="col-span-full flex items-center justify-center py-12">
+                      <div className="text-zinc-400">Loading lotteries...</div>
+                    </div>
+                  ) : exploreLotteries.length > 0 ? (
+                    exploreLotteries.map((lottery) => renderLotteryCard(lottery, "explore"))
+                  ) : (
+                    <div className="col-span-full flex items-center justify-center py-12">
+                      <div className="text-zinc-400">No lotteries available</div>
+                    </div>
+                  )}
+                </>
+              )}
               {activeTab === "bought" && sampleLotteries.bought.map((lottery) => renderLotteryCard(lottery, "bought"))}
               {activeTab === "created" &&
                 sampleLotteries.created.map((lottery) => renderLotteryCard(lottery, "created"))}

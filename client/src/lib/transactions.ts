@@ -78,30 +78,4 @@ export const getAllLotteries = async (  program: anchor.Program) => {
 };
 
 
-export const getLotteryById = async (lotteryId: number) => {
-  const program = useProgram();
-    if (!program) {
-        console.log("Program not initialized");
-        return null;
-    }
-    try {
-         const [lotteryPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("lottery"),
-        new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8),
-      ],
-      program.programId
-    );
-
-    const lotteryAccount = await (program.account as any).lottery.fetch(lotteryPda);
-
-    return {
-      id: lotteryPda.toBase58(),
-      ...lotteryAccount,
-    };
-    } catch (error) {
-        console.error("Error fetching lottery by ID:", error);
-        return null;
-    }
-}
 

@@ -1,4 +1,6 @@
 "use client"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useState } from "react"
 
 interface BuyTicketModalProps {
@@ -10,6 +12,14 @@ interface BuyTicketModalProps {
 
 export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice }: BuyTicketModalProps) {
   const [ticketCount, setTicketCount] = useState(1)
+  const { publicKey, connected } = useWallet()
+  const { setVisible } = useWalletModal()
+
+  const handleWalletAction = () => {
+    setVisible(true)
+  }
+
+  console.log("Wallet public key:", publicKey ? publicKey.toBase58() : "No wallet connected")
 
   if (!isOpen) return null
 
@@ -68,14 +78,15 @@ export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice
             </div>
           </div>
 
-          {/* Address (UI only) */}
+          {/* Address */}
           <div className="mb-5">
             <div className="mb-1 text-xs text-zinc-400">Solana Address</div>
             <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
               <span className="text-zinc-500">0x</span>
               <input
                 type="text"
-                placeholder="(UI only) Your wallet address"
+                value={connected && publicKey ? publicKey.toBase58() : ""}
+                placeholder={connected ? "Wallet connected" : "Connect your wallet first"}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-600"
                 readOnly
               />
@@ -84,15 +95,27 @@ export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice
 
           {/* Actions */}
           <div className="flex flex-col gap-3 sm:flex-row">
+            {connected ? (
+              <button
+                type="button"
+                disabled
+                className="flex-1 rounded-2xl bg-zinc-700 px-5 py-3 text-sm font-bold text-zinc-400 cursor-not-allowed"
+              >
+                Wallet Connected
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleWalletAction}
+                className="flex-1 rounded-2xl bg-lime-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
+              >
+                Connect Wallet
+              </button>
+            )}
             <button
               type="button"
-              className="flex-1 rounded-2xl bg-lime-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
-            >
-              Connect Wallet
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold text-zinc-300"
+              disabled={!connected}
+              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Confirm Purchase
             </button>

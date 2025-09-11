@@ -1,31 +1,83 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import BuyTicketModal from "@/components/BuyTicketModal"
+import { useProgram } from "@/lib/useProgram"
+import { toast } from "sonner"
+import { PublicKey } from "@solana/web3.js"
 
-// Sample lottery data
-const sampleLottery = {
-  id: "1",
-  title: "Weekly Mega Draw",
-  organizer: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
-  roundNumber: 42,
-  ticketPrice: 0.1,
-  totalTickets: 1000,
-  soldTickets: 687,
-  prizePool: 68.7,
-  timeRemaining: "2d 14h 32m",
-  status: "active",
-  description: "Join our biggest weekly lottery with guaranteed payouts and transparent draws on Solana blockchain.",
-  endDate: "2024-01-15T18:00:00Z",
-  isPurchased: false, // Dummy status
+interface LotteryData {
+  authority: any
+  bump: number
+  createdAt: any
+  id: string
+  lotteryId: any
+  maxTickets: number
+  randomnessFulfilled: boolean
+  state: any
+  ticketPrice: any
+  ticketsSold: number
+  totalPrizePool: any
+  winner: any
 }
 
 export default function LotteryPage() {
   const params = useParams()
   const [showBuyModal, setShowBuyModal] = useState(false)
-  const [isPurchased, setIsPurchased] = useState(sampleLottery.isPurchased)
+  const [isPurchased, setIsPurchased] = useState(false)
+  const [lotteryData, setLotteryData] = useState<LotteryData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const program = useProgram()
+  const id = params.id
+
+  const fetchlottery = async () => {
+    try {
+      if (!program) {
+        toast.error("Program not initialized")
+        return
+      }
+
+      if (!id) {
+        toast.error("Lottery ID not found in URL")
+        return
+      }
+
+      console.log("Fetching lottery with id:", id)
+
+      const lotteryAccount = await (program.account as any).lottery.fetch(
+        new PublicKey(id), // 👈 params.id is the PDA string
+      )
+
+      console.log("Fetched lottery:", lotteryAccount)
+      setLotteryData(lotteryAccount)
+      setLoading(false)
+      toast.success("Lottery fetched successfully!")
+    } catch (error) {
+      console.error("Error fetching lottery:", error)
+      setLoading(false)
+      toast.error("Error fetching lottery")
+    }
+  }
+
+  useEffect(() => {
+    if (program && id) {
+      fetchlottery()
+    }
+  }, [program, id])
+
+  const lamportsToSol = (lamports: any) => {
+    if (!lamports || typeof lamports.toNumber !== "function") return 0
+    return lamports.toNumber() / 1000000000 // 1 SOL = 1,000,000,000 lamports
+  }
+
+  const getLotteryStatus = (state: any) => {
+    if (state?.waitingForTickets) return "Open"
+    if (state?.drawing) return "Drawing"
+    if (state?.completed) return "Completed"
+    return "Unknown"
+  }
 
   const sampleResults = [
     { rank: 1, wallet: "7XzC...9kLm", tickets: 15, prize: 34.35 },
@@ -42,6 +94,50 @@ export default function LotteryPage() {
     setShowBuyModal(false)
   }
 
+  if (loading) {
+    return (
+      <main className="relative min-h-screen bg-black text-white font-sans">
+        <Header />
+        <section className="relative z-10 pt-20 pb-12">
+          <div className="mx-auto max-w-4xl px-6">
+            <div className="text-center py-20">
+              <div className="w-16 h-16 border-2 border-lime-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-zinc-400 text-lg">Loading lottery details...</p>
+            </div>
+          </div>
+        </section>
+        <Footer />
+      </main>
+    )
+  }
+
+  if (!lotteryData) {
+    return (
+      <main className="relative min-h-screen bg-black text-white font-sans">
+        <Header />
+        <section className="relative z-10 pt-20 pb-12">
+          <div className="mx-auto max-w-4xl px-6">
+            <div className="text-center py-20">
+              <p className="text-red-400 text-lg">Failed to load lottery details</p>
+              <button
+                onClick={fetchlottery}
+                className="mt-4 px-6 py-2 bg-lime-500 hover:bg-lime-400 text-black rounded-lg font-semibold transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </section>
+        <Footer />
+      </main>
+    )
+  }
+
+  const ticketPrice = lamportsToSol(lotteryData.ticketPrice)
+  const totalPrizePool = lamportsToSol(lotteryData.totalPrizePool)
+  const status = getLotteryStatus(lotteryData.state)
+  const lotteryIdNumber = lotteryData.lotteryId?.toNumber() || 0
+
   return (
     <main className="relative min-h-screen bg-black text-white font-sans">
       <Header />
@@ -51,10 +147,12 @@ export default function LotteryPage() {
         <div className="mx-auto max-w-4xl px-6">
           <div className="text-center mb-8">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
-              Round #{sampleLottery.roundNumber}
+              Round #{lotteryIdNumber}
             </p>
-            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4">{sampleLottery.title}</h1>
-            <p className="text-zinc-300 max-w-2xl mx-auto leading-relaxed">{sampleLottery.description}</p>
+            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4">Lottery #{lotteryIdNumber}</h1>
+            <p className="text-zinc-300 max-w-2xl mx-auto leading-relaxed">
+              Join this blockchain lottery with transparent draws and instant payouts on Solana.
+            </p>
           </div>
 
           {/* Main Lottery Card */}
@@ -63,7 +161,7 @@ export default function LotteryPage() {
             <div className="flex items-center justify-between mb-6">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-lime-500/20 text-lime-400 border border-lime-500/30">
                 <div className="w-2 h-2 bg-lime-400 rounded-full mr-2 animate-pulse"></div>
-                {sampleLottery.status.toUpperCase()}
+                {status.toUpperCase()}
               </span>
               {isPurchased && (
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-500/20 text-violet-400 border border-violet-500/30">
@@ -79,18 +177,18 @@ export default function LotteryPage() {
                 <div>
                   <label className="text-xs text-zinc-400 uppercase tracking-wide">Organizer</label>
                   <div className="mt-1 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-                    <code className="text-sm text-zinc-200 break-all">{sampleLottery.organizer}</code>
+                    <code className="text-sm text-zinc-200 break-all">{lotteryData.authority.toString()}</code>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-zinc-400 uppercase tracking-wide">Ticket Price</label>
-                    <div className="mt-1 text-xl font-bold text-lime-400">{sampleLottery.ticketPrice} SOL</div>
+                    <div className="mt-1 text-xl font-bold text-lime-400">{ticketPrice.toFixed(3)} SOL</div>
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 uppercase tracking-wide">Round Number</label>
-                    <div className="mt-1 text-xl font-bold text-white">#{sampleLottery.roundNumber}</div>
+                    <div className="mt-1 text-xl font-bold text-white">#{lotteryIdNumber}</div>
                   </div>
                 </div>
               </div>
@@ -99,19 +197,19 @@ export default function LotteryPage() {
               <div className="space-y-4">
                 <div>
                   <label className="text-xs text-zinc-400 uppercase tracking-wide">Prize Pool</label>
-                  <div className="mt-1 text-3xl font-bold text-white">{sampleLottery.prizePool} SOL</div>
+                  <div className="mt-1 text-3xl font-bold text-white">{totalPrizePool.toFixed(3)} SOL</div>
                 </div>
 
                 <div>
                   <label className="text-xs text-zinc-400 uppercase tracking-wide">Tickets Sold</label>
                   <div className="mt-1 flex items-center gap-3">
                     <span className="text-lg font-semibold text-white">
-                      {sampleLottery.soldTickets} / {sampleLottery.totalTickets}
+                      {lotteryData.ticketsSold} / {lotteryData.maxTickets}
                     </span>
                     <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-lime-500 to-lime-400 rounded-full"
-                        style={{ width: `${(sampleLottery.soldTickets / sampleLottery.totalTickets) * 100}%` }}
+                        style={{ width: `${(lotteryData.ticketsSold / lotteryData.maxTickets) * 100}%` }}
                       ></div>
                     </div>
                   </div>
@@ -119,7 +217,7 @@ export default function LotteryPage() {
 
                 <div>
                   <label className="text-xs text-zinc-400 uppercase tracking-wide">Time Remaining</label>
-                  <div className="mt-1 text-lg font-semibold text-orange-400">{sampleLottery.timeRemaining}</div>
+                  <div className="mt-1 text-lg font-semibold text-orange-400">24:00:00</div>
                 </div>
               </div>
             </div>
@@ -171,7 +269,7 @@ export default function LotteryPage() {
           <div className="border border-zinc-800 bg-zinc-900/50 rounded-2xl p-8 backdrop-blur-sm">
             <h2 className="text-2xl font-bold text-white mb-6">Results</h2>
 
-            {sampleLottery.status === "active" ? (
+            {status === "Open" ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-4">
                   <div className="w-6 h-6 border-2 border-lime-400 border-t-transparent rounded-full animate-spin"></div>
@@ -227,8 +325,8 @@ export default function LotteryPage() {
       <BuyTicketModal
         isOpen={showBuyModal}
         onClose={() => setShowBuyModal(false)}
-        lotteryId={sampleLottery.id}
-        ticketPrice={sampleLottery.ticketPrice}
+        lotteryId={id as string}
+        ticketPrice={ticketPrice}
       />
     </main>
   )
