@@ -1,6 +1,10 @@
 "use client"
-import { useWallet } from "@solana/wallet-adapter-react"
+import { buyTicket } from "@/lib/transactions"
+import { useProgram } from "@/lib/useProgram"
+import { program } from "@coral-xyz/anchor/dist/cjs/native/system"
+import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
+import { PublicKey } from "@solana/web3.js"
 import { useState } from "react"
 
 interface BuyTicketModalProps {
@@ -8,16 +12,50 @@ interface BuyTicketModalProps {
   onClose: () => void
   lotteryId: string
   ticketPrice: number
+  // id:  string
 }
 
 export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice }: BuyTicketModalProps) {
   const [ticketCount, setTicketCount] = useState(1)
   const { publicKey, connected } = useWallet()
   const { setVisible } = useWalletModal()
+  const [loading, setLoading] = useState(false)
+  const program = useProgram();
+  const wallet = useAnchorWallet();
 
+  console.log("Lottery ID prop:", lotteryId);
   const handleWalletAction = () => {
     setVisible(true)
   }
+
+const handleBuyTickets = async () => {
+  setLoading(true);
+
+  try {
+    if (!program || !wallet) {
+      console.log("Program or wallet not found");
+      return;
+    }
+
+    if (!lotteryId) {
+      console.log("No lottery ID found");
+      return;
+    }
+
+    // Call the rewritten buyTicket function
+    const response = await buyTicket(program, lotteryId, wallet);
+
+    if (response) {
+      console.log("🎟️ Tickets purchased successfully:", response);
+      onClose();
+    }
+  } catch (error) {
+    console.error("❌ Error purchasing tickets:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   console.log("Wallet public key:", publicKey ? publicKey.toBase58() : "No wallet connected")
 
@@ -114,10 +152,11 @@ export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice
             )}
             <button
               type="button"
+              onClick={handleBuyTickets}
               disabled={!connected}
-              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-2xl  border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold cursor-pointer text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Confirm Purchase
+              {loading ? "Processing..." : "Confirm Purchase"}
             </button>
           </div>
 

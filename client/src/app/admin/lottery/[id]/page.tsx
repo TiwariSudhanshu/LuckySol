@@ -7,6 +7,8 @@ import BuyTicketModal from "@/components/BuyTicketModal"
 import { useProgram } from "@/lib/useProgram"
 import { toast } from "sonner"
 import { PublicKey } from "@solana/web3.js"
+import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react"
+import { startLottery } from "@/lib/transactions"
 
 interface LotteryData {
   authority: any
@@ -31,7 +33,7 @@ export default function AdminLotteryPage() {
   const [loading, setLoading] = useState(true)
   const program = useProgram()
   const id = params.id
-
+  const wallet = useAnchorWallet();
   const fetchLottery = async () => {
     try {
       if (!program) {
@@ -49,6 +51,7 @@ export default function AdminLotteryPage() {
       const lotteryAccount = await (program.account as any).lottery.fetch(
         new PublicKey(id), // 👈 params.id is the PDA string
       )
+      
 
       console.log("Fetched lottery:", lotteryAccount)
       setLotteryData(lotteryAccount)
@@ -58,6 +61,30 @@ export default function AdminLotteryPage() {
       console.error("Error fetching lottery:", error)
       setLoading(false)
       toast.error("Error fetching lottery")
+    }
+  }
+
+  const startRound = async () => {
+    if (!program) {
+      console.log("Program not initialized");
+      return;
+    }
+    if (!wallet) {
+      console.log("No wallet found");
+      return;
+    }
+    if (!id) {
+      console.log("No lottery ID found in URL");
+      return;
+    }
+
+    try {
+      const tx = await startLottery(program, new PublicKey(id), wallet);
+      console.log("Round started with tx:", tx);
+      toast.success("Round started successfully!");
+    } catch (error) {
+      console.log("Error starting round:", error);
+      toast.error("Error starting round");
     }
   }
 
@@ -79,10 +106,6 @@ export default function AdminLotteryPage() {
     return "Unknown"
   }
 
-  const handleStartRound = () => {
-    console.log("[v0] Admin: Starting round")
-    toast.success("Round started!")
-  }
 
   const handleEndRound = () => {
     console.log("[v0] Admin: Ending round")
@@ -184,7 +207,7 @@ export default function AdminLotteryPage() {
               <div className="flex gap-3">
                 {status === "Open" && (
                   <button
-                    onClick={handleStartRound}
+                    onClick={startRound}
                     className="px-4 py-2 bg-lime-500 hover:bg-lime-400 text-black rounded-lg font-semibold text-sm transition-colors"
                   >
                     Start Round
