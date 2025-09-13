@@ -8,7 +8,7 @@ import { useProgram } from "@/lib/useProgram"
 import { toast } from "sonner"
 import { PublicKey } from "@solana/web3.js"
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react"
-import { startLottery } from "@/lib/transactions"
+import { endLottery, payoutWinner, startLottery, withdrawWinner } from "@/lib/transactions"
 
 interface LotteryData {
   authority: any
@@ -85,6 +85,76 @@ export default function AdminLotteryPage() {
     } catch (error) {
       console.log("Error starting round:", error);
       toast.error("Error starting round");
+    }
+  }
+
+  const endRound = async ()=>{
+    if(!program){
+      console.log("Program not initialized");
+      return;
+    }
+    if(!wallet){
+      console.log("No wallet found");
+      return;
+    }
+    if(!id){
+      console.log("No lottery ID found in URL");
+      return;
+    }
+    try {
+      const tx = await endLottery(program, new PublicKey(id), wallet);
+      console.log("Round ended with tx:", tx);
+      toast.success("Round ended successfully!");
+    } catch (error) {
+      console.log("Error ending round:", error);
+      toast.error("Error ending round");
+    }
+  }
+
+  const declareWinner = async ()=>{
+    try {
+      if(!program || !wallet || !id){
+        console.log("Program, wallet, or lottery ID not found");
+        return;
+      }
+      const randomness = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256));
+      const tx = await withdrawWinner(program, new PublicKey(id), wallet, randomness);
+      console.log("Winner declared with tx:", tx);
+      toast.success("Winner declared successfully!");
+    } catch (error) {
+      console.log("Error declaring winner:", error);
+      toast.error("Error declaring winner");
+    }
+  }
+
+  const payout = async ()=>{
+    try{
+      if(!program || !wallet || !id){
+        console.log("Program, wallet, lottery ID, or lottery data not found");
+        return;
+      }
+      if(!lotteryData?.winner || !lotteryData?.authority ){
+        console.log("Winner, authority, or platform fee account not found in lottery data");
+        return;
+      }
+      const platformFeeAccount = process.env.NEXT_PUBLIC_PLATFORM_FEE_ACCOUNT;
+      if(!platformFeeAccount){
+        console.log("Platform fee account not set in environment variables");
+        return;
+      }
+      const tx = await payoutWinner(
+        program,
+        new PublicKey(id),
+        wallet,
+        lotteryData.winner,
+        lotteryData.authority,
+        new PublicKey(platformFeeAccount)
+      );
+      console.log("Winner paid out with tx:", tx);
+      toast.success("Winner paid out successfully!");
+    } catch (error) {
+      console.log("Error paying out winner:", error);
+      toast.error("Error paying out winner");
     }
   }
 
@@ -216,19 +286,27 @@ export default function AdminLotteryPage() {
 
                 {status === "Open" && (
                   <button
-                    onClick={handleEndRound}
+                    onClick={endRound}
                     className="px-4 py-2 bg-red-500 hover:bg-red-400 text-white rounded-lg font-semibold text-sm transition-colors"
                   >
                     End Round
                   </button>
                 )}
 
-                {status === "Completed" && (
+                {status === "Open" && (
                   <button
-                    onClick={handleDeclareResults}
+                    onClick={declareWinner}
                     className="px-4 py-2 bg-violet-500 hover:bg-violet-400 text-white rounded-lg font-semibold text-sm transition-colors"
                   >
                     Declare Results
+                  </button>
+                )}
+                  {status === "Open" && (
+                  <button
+                    onClick={payout}
+                    className="px-4 py-2 bg-violet-500 hover:bg-violet-400 text-white rounded-lg font-semibold text-sm transition-colors"
+                  >
+                    Payout
                   </button>
                 )}
               </div>

@@ -216,3 +216,80 @@ export const getMyTickets = async (
     return [];
   }
 };
+
+export const endLottery = async(
+  program: anchor.Program,
+  lotteryPda: PublicKey,
+  wallet: AnchorWallet
+) => {
+  if (!program) {
+    console.log("Program not initialized");
+    return;
+  }
+  if (!wallet) {
+    console.log("No wallet found");
+    return;
+  }
+
+  try {
+    const tx = await program.methods.closeRound()
+      .accounts({
+        authority: wallet.publicKey,
+        lottery: lotteryPda,
+      })
+      .rpc();
+
+    console.log("🏁 Lottery ended! Tx:", tx);
+    return tx;
+  } catch (error) {
+    console.error("❌ Error ending lottery:", error);
+  }
+};
+
+export const withdrawWinner = async (
+  program: anchor.Program,
+  lotteryPda: PublicKey,
+  wallet: AnchorWallet,
+  randomness: number[] 
+) => {
+  try {
+    const tx = await program.methods.fulfillRandomness(randomness)
+      .accounts({
+        authority: wallet.publicKey,
+        lottery: lotteryPda,
+      })
+      .rpc();
+
+    console.log("🎲 Randomness fulfilled! Tx:", tx);
+    return tx;
+  } catch (error) {
+    console.error("❌ Error fulfilling randomness:", error);
+  }
+};
+
+export const payoutWinner = async (
+  program: anchor.Program,
+  lotteryPda: PublicKey,
+  wallet: AnchorWallet,
+  winner: PublicKey,
+  lotteryCreator: PublicKey,
+  platformFeeAccount: PublicKey
+) => {
+  try {
+    const tx = await program.methods.payout()
+      .accounts({
+        authority: wallet.publicKey,
+        lottery: lotteryPda,
+        winner,
+        lotteryCreator,
+        platformFeeAccount,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    console.log("💰 Winner paid out! Tx:", tx);
+    return tx;
+  } catch (error) {
+    console.error("❌ Error paying out winner:", error);
+  }
+};

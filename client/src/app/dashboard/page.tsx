@@ -141,11 +141,10 @@ const fetchMyTickets = async () => {
         let lotteryStatus = "Unknown";
         let lotteryEndTime: Date | null = null;
         let purchasedAt = new Date();
-
-        if (ticket.lotteryPda) {
+        if (ticket.lottery) {
           try {
             const lotteryAccount = await (program.account as any).lottery.fetch(
-              new PublicKey(ticket.lotteryPda)
+              new PublicKey(ticket.lottery)
             );
             lotteryName = lotteryAccount.name || lotteryName;
             lotteryStatus = lotteryAccount.status === 0 ? "Open" : "Completed";
@@ -192,16 +191,23 @@ const fetchMyTickets = async () => {
 
   const [activeTab, setActiveTab] = useState("explore")
 
-  const renderTicketCard = (ticket: any) => (
+ const renderTicketCard = (ticket: any) => {
+  const lotteryAddress = ticket.lottery 
+    ? new PublicKey(ticket.lottery).toBase58() 
+    : null;
+
+  return (
     <div
-      key={ticket.id }
+      key={ticket.id}
       className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] transition-colors hover:border-zinc-700"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-white">Ticket #{ ticket.id.toString().slice(0, 6)}</h3>
+          <h3 className="text-base font-semibold text-white">
+            Ticket #{ticket.id.toString().slice(0, 6)}
+          </h3>
           <p className="mt-0.5 text-xs text-zinc-400">
-            {ticket.lotteryName || `Lottery: ${ticket.lotteryPda?.slice(0, 8)}...`}
+            {ticket.lotteryName || (lotteryAddress ? `Lottery: ${lotteryAddress.slice(0, 8)}...` : "N/A")}
           </p>
         </div>
         <span
@@ -219,7 +225,7 @@ const fetchMyTickets = async () => {
         <div>
           <dt className="text-zinc-400">Lottery PDA</dt>
           <dd className="mt-0.5 font-mono text-xs text-white">
-            {ticket.lotteryPda ? `${ticket.lotteryPda.slice(0, 12)}...` : "N/A"}
+            {lotteryAddress ? `${lotteryAddress.slice(0, 12)}...` : "N/A"}
           </dd>
         </div>
         <div>
@@ -234,7 +240,9 @@ const fetchMyTickets = async () => {
         </div>
         <div>
           <dt className="text-zinc-400">Ticket ID</dt>
-          <dd className="mt-0.5 text-white">#{ ticket.id.toString().slice(0, 6)}</dd>
+          <dd className="mt-0.5 text-white">
+            #{ticket.id.toString().slice(0, 6)}
+          </dd>
         </div>
       </dl>
 
@@ -244,9 +252,9 @@ const fetchMyTickets = async () => {
             ? "Lottery is still active"
             : "Lottery has ended"}
         </p>
-        {ticket.lotteryPda && (
+        {lotteryAddress && (
           <Link
-            href={`/lottery/${ticket.lotteryPda}`}
+            href={`/lottery/${lotteryAddress}`}
             className="rounded-full border border-zinc-800 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-700 hover:text-white"
           >
             View Lottery
@@ -255,6 +263,7 @@ const fetchMyTickets = async () => {
       </div>
     </div>
   )
+}
 
   const renderLotteryCard = (lottery: any, type: string) => (
     <div
