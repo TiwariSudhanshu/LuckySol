@@ -10,7 +10,7 @@ pub struct Payout<'info> {
     #[account(
         mut,
         has_one = authority,
-        constraint = lottery.state == LotteryState::Closed
+        constraint = lottery.state == LotteryState::WaitingForPayout
     )]
     pub lottery: Account<'info, Lottery>,
     

@@ -31,4 +31,7 @@ pub enum LotteryError {
     
     #[msg("Invalid payout calculation")]
     InvalidPayout,
+
+        #[msg("Lottery has expired/closed")]
+    LotteryClosed, 
 }

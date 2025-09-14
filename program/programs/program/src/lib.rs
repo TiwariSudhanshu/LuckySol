@@ -20,8 +20,9 @@ pub mod lottery {
         lottery_id: u64,
         ticket_price: u64,
         max_tickets: u32,
+        duration: i64, 
     ) -> Result<()> {
-        initialize_lottery_handler(ctx, lottery_id, ticket_price, max_tickets)
+        initialize_lottery_handler(ctx, lottery_id, ticket_price, max_tickets, duration)
     }
 
     pub fn buy_ticket(
@@ -31,19 +32,11 @@ pub mod lottery {
         buy_ticket_handler(ctx, lottery_id)
     }
 
-    pub fn start_round(ctx: Context<StartRound>) -> Result<()> {
-        start_round_handler(ctx)
-    }
-
     pub fn fulfill_randomness(
         ctx: Context<FulfillRandomness>,
         randomness: [u8; 32],
     ) -> Result<()> {
         fulfill_randomness_handler(ctx, randomness)
-    }
-
-    pub fn close_round(ctx: Context<CloseRound>) -> Result<()> {
-        close_round_handler(ctx)
     }
 
     pub fn payout(ctx: Context<Payout>) -> Result<()> {

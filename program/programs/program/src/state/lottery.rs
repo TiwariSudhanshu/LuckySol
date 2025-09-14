@@ -9,8 +9,9 @@ pub struct Lottery {
     pub tickets_sold: u32,
     pub total_prize_pool: u64,
     pub state: LotteryState,
-    pub winner: Option<u32>,
+    pub winner: Option<u32>,  
     pub created_at: i64,
+    pub duration: i64,        
     pub randomness_fulfilled: bool,
     pub bump: u8,
 }
@@ -24,8 +25,9 @@ impl Space for Lottery {
         4 +  // tickets_sold
         8 +  // total_prize_pool
         1 +  // state
-        1 + 4 + // winner (Option<u32>)
+        (1 + 4) + // winner (Option<u32>)
         8 +  // created_at
+        8 +  // duration
         1 +  // randomness_fulfilled
         1;   // bump
 }
@@ -35,6 +37,5 @@ pub enum LotteryState {
     WaitingForTickets,
     WaitingForRandomness,
     WaitingForPayout,
-    Closed,
     PaidOut,
 }

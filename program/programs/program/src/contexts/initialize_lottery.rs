@@ -6,7 +6,7 @@ use crate::state::Lottery;
 pub struct InitializeLottery<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-    
+
     #[account(
         init,
         payer = authority,
@@ -15,6 +15,6 @@ pub struct InitializeLottery<'info> {
         bump
     )]
     pub lottery: Account<'info, Lottery>,
-    
+
     pub system_program: Program<'info, System>,
 }

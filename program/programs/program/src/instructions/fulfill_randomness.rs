@@ -9,8 +9,12 @@ pub fn fulfill_randomness_handler(
 ) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
 
-    require!(lottery.state == LotteryState::WaitingForRandomness, LotteryError::InvalidLotteryState);
+    require!(
+        lottery.state == LotteryState::WaitingForRandomness,
+        LotteryError::InvalidLotteryState
+    );
     require!(!lottery.randomness_fulfilled, LotteryError::RandomnessAlreadyFulfilled);
+    require!(lottery.tickets_sold > 0, LotteryError::NoTicketsSold);
 
     // Convert randomness to winning ticket number
     let random_number = u64::from_le_bytes([

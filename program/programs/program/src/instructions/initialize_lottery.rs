@@ -7,6 +7,7 @@ pub fn initialize_lottery_handler(
     lottery_id: u64,
     ticket_price: u64,
     max_tickets: u32,
+    duration: i64, // ⏳ new param
 ) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
     let clock = Clock::get()?;
@@ -20,11 +21,17 @@ pub fn initialize_lottery_handler(
     lottery.state = LotteryState::WaitingForTickets;
     lottery.winner = None;
     lottery.created_at = clock.unix_timestamp;
+    lottery.duration = duration; 
     lottery.randomness_fulfilled = false;
     lottery.bump = ctx.bumps.lottery;
 
-    msg!("Lottery initialized with ID: {}, ticket price: {}, max tickets: {}", 
-         lottery_id, ticket_price, max_tickets);
+    msg!(
+        "Lottery initialized with ID: {}, ticket price: {}, max tickets: {}, duration: {} sec",
+        lottery_id,
+        ticket_price,
+        max_tickets,
+        duration
+    );
 
     Ok(())
 }
