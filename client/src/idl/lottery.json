@@ -90,34 +90,6 @@
       ]
     },
     {
-      "name": "close_round",
-      "discriminator": [
-        149,
-        14,
-        81,
-        88,
-        230,
-        226,
-        234,
-        37
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "lottery"
-          ]
-        },
-        {
-          "name": "lottery",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "fulfill_randomness",
       "discriminator": [
         235,
@@ -214,6 +186,10 @@
         {
           "name": "max_tickets",
           "type": "u32"
+        },
+        {
+          "name": "duration",
+          "type": "i64"
         }
       ]
     },
@@ -255,34 +231,6 @@
         },
         {
           "name": "platform_fee_account",
-          "writable": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "start_round",
-      "discriminator": [
-        144,
-        144,
-        43,
-        7,
-        193,
-        42,
-        217,
-        215
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "lottery"
-          ]
-        },
-        {
-          "name": "lottery",
           "writable": true
         }
       ],
@@ -367,6 +315,11 @@
       "code": 6009,
       "name": "InvalidPayout",
       "msg": "Invalid payout calculation"
+    },
+    {
+      "code": 6010,
+      "name": "LotteryClosed",
+      "msg": "Lottery has expired/closed"
     }
   ],
   "types": [
@@ -418,6 +371,10 @@
             "type": "i64"
           },
           {
+            "name": "duration",
+            "type": "i64"
+          },
+          {
             "name": "randomness_fulfilled",
             "type": "bool"
           },
@@ -441,9 +398,6 @@
           },
           {
             "name": "WaitingForPayout"
-          },
-          {
-            "name": "Closed"
           },
           {
             "name": "PaidOut"
