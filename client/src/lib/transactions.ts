@@ -1,220 +1,293 @@
 import { useProgram } from "./useProgram";
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 
+// Account sizes (from your IDL)
+const LOTTERY_ACCOUNT_SIZE = 96;
+const TICKET_ACCOUNT_SIZE = 85;
 
+// ---- Manual parsing ----
+const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey) => {
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let offset = 8; // skip discriminator
 
+  const authority = new PublicKey(data.slice(offset, offset + 32));
+  offset += 32;
 
-export const getAllLotteries = async (  program: anchor.Program) => {
+  const lotteryId = dv.getBigUint64(offset, true);
+  offset += 8;
 
+  const ticketPrice = dv.getBigUint64(offset, true);
+  offset += 8;
 
-  if (!program) {
-    console.log("Program not initialized");
-    return [];
-  }
+  const maxTickets = dv.getUint32(offset, true);
+  offset += 4;
+
+  const ticketsSold = dv.getUint32(offset, true);
+  offset += 4;
+
+  const totalPrizePool = dv.getBigUint64(offset, true);
+  offset += 8;
+
+  const stateByte = data[offset];
+  const stateNames = ['WaitingForTickets', 'WaitingForRandomness', 'WaitingForPayout', 'PaidOut'];
+  offset += 1;
+
+  const hasWinner = data[offset] === 1;
+  offset += 1;
+  let winner: number | null = null;
+  if (hasWinner) winner = dv.getUint32(offset, true);
+  offset += 4;
+
+  const createdAt = dv.getBigInt64(offset, true);
+  offset += 8;
+
+  const duration = dv.getBigInt64(offset, true);
+  offset += 8;
+
+  const randomnessFulfilled = data[offset] === 1;
+  offset += 1;
+
+  const bump = data[offset];
+
+  return {
+    id: pubkey.toBase58(),
+    authority: authority.toBase58(),
+    lotteryId: lotteryId.toString(),
+    ticketPrice: ticketPrice.toString(),
+    maxTickets,
+    ticketsSold,
+    totalPrizePool: totalPrizePool.toString(),
+    state: stateNames[stateByte] || 'Unknown',
+    winner,
+    createdAt: createdAt.toString(),
+    duration: duration.toString(),
+    randomnessFulfilled,
+    bump,
+    _manualParse: true,
+  };
+};
+
+const parseTicketAccount = (data: Uint8Array, pubkey: PublicKey) => {
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let offset = 8; // discriminator
+
+  const lottery = new PublicKey(data.slice(offset, offset + 32));
+  offset += 32;
+
+  const player = new PublicKey(data.slice(offset, offset + 32));
+  offset += 32;
+
+  const ticketNumber = dv.getUint32(offset, true);
+  offset += 4;
+
+  const purchasedAt = dv.getBigInt64(offset, true);
+  offset += 8;
+
+  const bump = data[offset];
+
+  return {
+    id: pubkey.toBase58(),
+    lottery: lottery.toBase58(),
+    player: player.toBase58(),
+    ticketNumber,
+    purchasedAt: purchasedAt.toString(),
+    bump,
+    _manualParse: true,
+  };
+};
+
+// ---- Fetch all lotteries ----
+export const getAllLotteries = async (program: anchor.Program) => {
+  if (!program) return [];
 
   try {
-    const lotteries = await (program.account as any)["lottery"].all();
-    return lotteries.map((lottery: any) => ({
-      id: lottery.publicKey.toBase58(),
-      ...lottery.account,
+    return (await (program.account as any).lottery.all()).map((l: any) => ({
+      id: l.publicKey.toBase58(),
+      ...l.account,
     }));
-  } catch (error) {
-    console.error("Error fetching lotteries:", error);
-    return [];
+  } catch {
+    // fallback to manual fetch
+    const accounts = await program.provider.connection.getProgramAccounts(program.programId, {
+      filters: [{ dataSize: LOTTERY_ACCOUNT_SIZE }],
+    });
+    return accounts.map(acc => parseLotteryAccount(acc.account.data, acc.pubkey));
   }
 };
 
+// ---- Fetch lotteries created by wallet ----
 export const getCreatedLotteries = async (program: anchor.Program, wallet: AnchorWallet) => {
-  if (!program) {
-    console.log("Program not initialized");
-    return [];
-  }
-  if (!wallet) {
-    console.log("No wallet found");
-    return [];
-  }
+  if (!program || !wallet) return [];
+
   try {
-    const lotteries = await (program.account as any)["lottery"].all([
+    return (await (program.account as any).lottery.all([
       {
-        memcmp: {
-          offset: 8, // Skip the account discriminator
-          bytes: wallet.publicKey.toBase58(),
-        },
+        memcmp: { offset: 8, bytes: wallet.publicKey.toBase58() },
       },
-    ]);
-    return lotteries.map((lottery: any) => ({
-      id: lottery.publicKey.toBase58(),
-      ...lottery.account,
+    ])).map((l: any) => ({
+      id: l.publicKey.toBase58(),
+      ...l.account,
     }));
-  } catch (error) {
-    console.error("Error fetching created lotteries:", error);
-    return [];
+  } catch {
+    const accounts = await program.provider.connection.getProgramAccounts(program.programId, {
+      filters: [
+        { dataSize: LOTTERY_ACCOUNT_SIZE },
+        { memcmp: { offset: 8, bytes: wallet.publicKey.toBase58() } },
+      ],
+    });
+    return accounts.map(acc => parseLotteryAccount(acc.account.data, acc.pubkey));
   }
 };
 
+// ---- Fetch tickets by wallet ----
+export const getMyTickets = async (program: anchor.Program, wallet: AnchorWallet) => {
+  if (!program || !wallet) return [];
 
-// CREATE LOTTERY
-export const createLottery = async (  
+  try {
+    return (await (program.account as any).ticket.all([
+      {
+        memcmp: { offset: 40, bytes: wallet.publicKey.toBase58() },
+      },
+    ])).map((t: any) => ({
+      id: t.publicKey.toBase58(),
+      ...t.account,
+    }));
+  } catch {
+    const accounts = await program.provider.connection.getProgramAccounts(program.programId, {
+      filters: [
+        { dataSize: TICKET_ACCOUNT_SIZE },
+        { memcmp: { offset: 40, bytes: wallet.publicKey.toBase58() } },
+      ],
+    });
+    return accounts.map(acc => parseTicketAccount(acc.account.data, acc.pubkey));
+  }
+};
+
+// ---- Fetch lottery by PDA ----
+export const getLotteryByPda = async (program: anchor.Program, lotteryPda: PublicKey) => {
+  try {
+    return await (program.account as any).lottery.fetch(lotteryPda);
+  } catch {
+    const info = await program.provider.connection.getAccountInfo(lotteryPda);
+    if (!info) return null;
+    return parseLotteryAccount(info.data, lotteryPda);
+  }
+};
+
+// ---- Create lottery ----
+export const createLottery = async (
   lotteryId: number,
-  ticketPrice: number,
+  ticketPriceSol: number, // user passes in SOL
   maxTickets: number,
-  duration: number, // add duration
-  program: anchor.Program,   
+  duration: number,
+  program: anchor.Program,
   wallet: AnchorWallet
 ) => {
-  if (!program) return console.log("Program not initialized");
-  if (!wallet) return console.log("No wallet found");
+  if (!program || !wallet) return;
+
+  // Convert SOL → lamports
+  const ticketPriceLamports = new anchor.BN(ticketPriceSol * LAMPORTS_PER_SOL);
 
   const [lotteryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("lottery"), new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8)],
     program.programId
   );
 
-  try {
-    const tx = await program.methods.initializeLottery(
-      new anchor.BN(lotteryId),
-      new anchor.BN(ticketPrice),
-      new anchor.BN(maxTickets),
-      new anchor.BN(duration)
-    )
-    .accounts({
-      lottery: lotteryPda,
-      authority: wallet.publicKey,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
+  const tx = await program.methods.initializeLottery(
+    new anchor.BN(lotteryId),
+    ticketPriceLamports, // ✅ now in lamports
+    new anchor.BN(maxTickets),
+    new anchor.BN(duration)
+  )
+  .accounts({
+    lottery: lotteryPda,
+    authority: wallet.publicKey,
+    systemProgram: SystemProgram.programId,
+  })
+  .rpc();
 
-    console.log("Lottery created with tx:", tx);
-    return tx;
-  } catch (error) {
-    console.error("Error creating lottery:", error);
-  }
+  return tx;
 };
 
-// BUY TICKET
+
+// ---- Buy ticket ----
 export const buyTicket = async (
   program: anchor.Program,
   lotteryPdaString: string,
   wallet: AnchorWallet
 ) => {
-  if (!program) return console.log("Program not initialized");
-  if (!wallet) return console.log("No wallet found");
+  if (!program || !wallet) return;
 
+  const lotteryPda = new PublicKey(lotteryPdaString);
+  let lotteryAccount: any;
   try {
-    const lotteryPda = new PublicKey(lotteryPdaString);
-    const lotteryAccount: any = await (program.account as any).lottery.fetch(lotteryPda);
-    const lotteryId = lotteryAccount.lotteryId.toNumber();
-
-    const [derivedPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("lottery"),
-        new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8),
-      ],
-      program.programId
-    );
-    if (!derivedPda.equals(lotteryPda)) throw new Error("PDA mismatch!");
-
-    const tx = await program.methods.buyTicket(new anchor.BN(lotteryId))
-      .accounts({
-        player: wallet.publicKey,
-        lottery: lotteryPda,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log("🎟️ Ticket purchased! Tx:", tx);
-    return tx;
-  } catch (error) {
-    console.error("❌ Error buying ticket:", error);
+    lotteryAccount = await (program.account as any).lottery.fetch(lotteryPda);
+  } catch {
+    const info = await program.provider.connection.getAccountInfo(lotteryPda);
+    if (!info) throw new Error("Lottery account not found");
+    lotteryAccount = parseLotteryAccount(info.data, lotteryPda);
   }
+
+  const lotteryId = parseInt(lotteryAccount.lotteryId);
+
+  const [ticketPda] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("ticket"),
+      lotteryPda.toBuffer(),
+      new anchor.BN(lotteryAccount.ticketsSold).toArrayLike(Buffer, "le", 4),
+    ],
+    program.programId
+  );
+
+  const tx = await program.methods.buyTicket(new anchor.BN(lotteryId))
+    .accounts({
+      player: wallet.publicKey,
+      lottery: lotteryPda,
+      ticket: ticketPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  return tx;
 };
 
-
-
-export const getMyTickets = async (
-  program: anchor.Program,
-  wallet: AnchorWallet
-) => {
-  if (!program) {
-    console.log("Program not initialized");
-    return [];
-  }
-
-  if (!wallet) {
-    console.log("No wallet found");
-    return [];
-  }
-
-  try {
-    const tickets: any[] = await (program.account as any).ticket.all([
-      {
-        memcmp: {
-          offset: 40, 
-          bytes: wallet.publicKey.toBase58(),
-        },
-      },
-    ]);
-
-    return tickets.map(ticket => ({
-      id: ticket.publicKey.toBase58(),
-      ...ticket.account,
-    }));
-  } catch (error) {
-    console.error("❌ Error fetching tickets:", error);
-    return [];
-  }
-};
-
-
-
-// FULFILL RANDOMNESS (after tickets done or duration hit)
+// ---- Fulfill randomness ----
 export const fulfillRandomness = async (
   program: anchor.Program,
   lotteryPda: PublicKey,
   wallet: AnchorWallet,
   randomness: number[]
 ) => {
-  try {
-    const tx = await program.methods.fulfillRandomness(randomness)
-      .accounts({
-        authority: wallet.publicKey,
-        lottery: lotteryPda,
-      })
-      .rpc();
+  const randomnessArray = randomness.slice(0, 32).concat(Array(32 - randomness.length).fill(0));
 
-    console.log("🎲 Randomness fulfilled! Tx:", tx);
-    return tx;
-  } catch (error) {
-    console.error("❌ Error fulfilling randomness:", error);
-  }
+  return await program.methods.fulfillRandomness(randomnessArray)
+    .accounts({
+      authority: wallet.publicKey,
+      lottery: lotteryPda,
+    })
+    .rpc();
 };
 
-// PAYOUT WINNER
+// ---- Payout winner ----
 export const payoutWinner = async (
   program: anchor.Program,
   lotteryPda: PublicKey,
   wallet: AnchorWallet,
+  winnerTicketPda: PublicKey,
   winner: PublicKey,
   lotteryCreator: PublicKey,
   platformFeeAccount: PublicKey
 ) => {
-  try {
-    const tx = await program.methods.payout()
-      .accounts({
-        authority: wallet.publicKey,
-        lottery: lotteryPda,
-        winner,
-        lotteryCreator,
-        platformFeeAccount,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    console.log("💰 Winner paid out! Tx:", tx);
-    return tx;
-  } catch (error) {
-    console.error("❌ Error paying out winner:", error);
-  }
+  return await program.methods.payout()
+    .accounts({
+      authority: wallet.publicKey,
+      lottery: lotteryPda,
+      winnerTicket: winnerTicketPda,
+      winner,
+      lotteryCreator,
+      platformFeeAccount,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
 };
