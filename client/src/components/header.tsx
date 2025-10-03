@@ -21,10 +21,10 @@ export function Header() {
   return (
     <header className="relative z-10">
       <div className="mx-auto flex max-w-7xl items-center justify-between py-5 md:py-6">
-        <div className="flex items-center gap-2">
+        <button onClick={()=>{window.location.href = '/dashboard'}} className="cursor-pointer flex items-center gap-2">
           <div className="h-8 w-8 rounded-full bg-lime-500" aria-hidden="true" />
           <span className="text-lg font-semibold tracking-wide">LuckySol</span>
-        </div>
+        </button>
         <nav className="flex items-center gap-3">
           <a
             href="#features"

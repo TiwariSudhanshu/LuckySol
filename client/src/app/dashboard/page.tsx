@@ -152,8 +152,84 @@ export default function DashboardPage() {
         return;
       }
       setLoading(true);
+
       const data = await getCreatedLotteries(program, wallet);
-      setCreatedLotteries(data);
+
+      // Transform created lotteries to include the same fields as exploreLotteries
+      const transformed = await Promise.all(
+        data.map(async (lotteryData: any, index: number) => {
+          try {
+            // lotteryData should contain an id we can fetch
+            const lottery = await (program.account as any).lottery.fetch(
+              new PublicKey(lotteryData.id)
+            );
+
+            const status = lottery.randomnessFulfilled ? "Completed" : "Open";
+
+            return {
+              id: lotteryData.id,
+              // keep name if the on-chain account has a name, otherwise fallback
+              name:
+                (typeof lottery.name === "string" && lottery.name.trim() !== "")
+                  ? lottery.name
+                  : `Lottery #${index + 1}`,
+              ticketPrice: lamportsToSolString(lottery.ticketPrice),
+              ticketPriceRaw: lottery.ticketPrice,
+              duration: formatDuration(lottery.duration),
+              ticketsSold: lottery.ticketsSold?.toString() || "0",
+              createdAt: formatDateOnly(lottery.createdAt),
+              status,
+              maxTickets: lottery.maxTickets?.toString() || "0",
+              // preserve creator if present on-chain (stringified)
+              creator:
+                lottery.creator && typeof lottery.creator.toString === "function"
+                  ? lottery.creator.toString()
+                  : undefined,
+            };
+          } catch (error) {
+            console.error("Error fetching created lottery", lotteryData, error);
+            // Fallback: try to use fields returned from getCreatedLotteries if present,
+            // but ensure the fields our UI expects exist.
+            try {
+              return {
+                id: lotteryData.id || lotteryData.publicKey || `created-${index}`,
+                name: lotteryData.name || `Lottery #${index + 1}`,
+                ticketPrice:
+                  lotteryData.ticketPrice
+                    ? lamportsToSolString(lotteryData.ticketPrice)
+                    : "0 SOL",
+                ticketPriceRaw: lotteryData.ticketPrice || "0",
+                duration: lotteryData.duration
+                  ? formatDuration(lotteryData.duration)
+                  : "0s",
+                ticketsSold: lotteryData.ticketsSold?.toString() || "0",
+                createdAt: lotteryData.createdAt
+                  ? formatDateOnly(lotteryData.createdAt)
+                  : "N/A",
+                status: lotteryData.randomnessFulfilled ? "Completed" : "Open",
+                maxTickets: lotteryData.maxTickets?.toString() || "0",
+                creator: lotteryData.creator,
+              };
+            } catch (err) {
+              // final fallback
+              return {
+                id: lotteryData.id || `created-${index}`,
+                name: `Lottery #${index + 1}`,
+                ticketPrice: "0 SOL",
+                ticketPriceRaw: "0",
+                duration: "0s",
+                ticketsSold: "0",
+                createdAt: "N/A",
+                status: "Open",
+                maxTickets: "0",
+                creator: undefined,
+              };
+            }
+          }
+        })
+      );
+
+      setCreatedLotteries(transformed.filter(Boolean));
       toast.success("Created lotteries fetched successfully");
     } catch (error) {
       toast.error("Error fetching created lotteries");
