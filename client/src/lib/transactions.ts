@@ -1,3 +1,4 @@
+
 import { useProgram } from "./useProgram";
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
@@ -108,7 +109,6 @@ export const getAllLotteries = async (program: anchor.Program) => {
       ...l.account,
     }));
   } catch {
-    // fallback to manual fetch
     const accounts = await program.provider.connection.getProgramAccounts(program.programId, {
       filters: [{ dataSize: LOTTERY_ACCOUNT_SIZE }],
     });
@@ -178,7 +178,7 @@ export const getLotteryByPda = async (program: anchor.Program, lotteryPda: Publi
 // ---- Create lottery ----
 export const createLottery = async (
   lotteryId: number,
-  ticketPriceSol: number, // user passes in SOL
+  ticketPriceSol: number,
   maxTickets: number,
   duration: number,
   program: anchor.Program,
@@ -186,30 +186,32 @@ export const createLottery = async (
 ) => {
   if (!program || !wallet) return;
 
-  // Convert SOL → lamports
   const ticketPriceLamports = new anchor.BN(ticketPriceSol * LAMPORTS_PER_SOL);
-
   const [lotteryPda] = PublicKey.findProgramAddressSync(
     [Buffer.from("lottery"), new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8)],
     program.programId
   );
 
-  const tx = await program.methods.initializeLottery(
-    new anchor.BN(lotteryId),
-    ticketPriceLamports, // ✅ now in lamports
-    new anchor.BN(maxTickets),
-    new anchor.BN(duration)
-  )
-  .accounts({
-    lottery: lotteryPda,
-    authority: wallet.publicKey,
-    systemProgram: SystemProgram.programId,
-  })
-  .rpc();
+  const tx = await program.methods
+    .initializeLottery(new anchor.BN(lotteryId), ticketPriceLamports, new anchor.BN(maxTickets), new anchor.BN(duration))
+    .accounts({
+      lottery: lotteryPda,
+      authority: wallet.publicKey,
+      systemProgram: SystemProgram.programId,
+    })
+    .transaction();
 
-  return tx;
+  const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.lastValidBlockHeight = lastValidBlockHeight;
+  tx.feePayer = wallet.publicKey;
+
+  const signedTx = await wallet.signTransaction(tx);
+  const sig = await program.provider.connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+  await program.provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+
+  return sig;
 };
-
 
 // ---- Buy ticket ----
 export const buyTicket = async (
@@ -221,6 +223,7 @@ export const buyTicket = async (
 
   const lotteryPda = new PublicKey(lotteryPdaString);
   let lotteryAccount: any;
+
   try {
     lotteryAccount = await (program.account as any).lottery.fetch(lotteryPda);
   } catch {
@@ -231,6 +234,17 @@ export const buyTicket = async (
 
   const lotteryId = parseInt(lotteryAccount.lotteryId);
 
+  // Ticket price in lamports
+  const ticketPriceLamports = BigInt(lotteryAccount.ticketPrice);
+
+  // 🔥 Check wallet balance first
+  const balance = BigInt(await program.provider.connection.getBalance(wallet.publicKey));
+  if (balance < ticketPriceLamports) {
+    throw new Error(
+      `Insufficient SOL! Your balance is ${(balance / BigInt(LAMPORTS_PER_SOL))} SOL, but ticket costs ${(ticketPriceLamports / BigInt(LAMPORTS_PER_SOL))} SOL`
+    );
+  }
+
   const [ticketPda] = PublicKey.findProgramAddressSync(
     [
       Buffer.from("ticket"),
@@ -240,6 +254,7 @@ export const buyTicket = async (
     program.programId
   );
 
+  // Build transaction manually
   const tx = await program.methods.buyTicket(new anchor.BN(lotteryId))
     .accounts({
       player: wallet.publicKey,
@@ -247,10 +262,20 @@ export const buyTicket = async (
       ticket: ticketPda,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .transaction();
 
-  return tx;
+  const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.lastValidBlockHeight = lastValidBlockHeight;
+  tx.feePayer = wallet.publicKey;
+
+  const signedTx = await wallet.signTransaction(tx);
+  const sig = await program.provider.connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+  await program.provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+
+  return sig;
 };
+
 
 // ---- Fulfill randomness ----
 export const fulfillRandomness = async (
@@ -261,12 +286,23 @@ export const fulfillRandomness = async (
 ) => {
   const randomnessArray = randomness.slice(0, 32).concat(Array(32 - randomness.length).fill(0));
 
-  return await program.methods.fulfillRandomness(randomnessArray)
+  const tx = await program.methods.fulfillRandomness(randomnessArray)
     .accounts({
       authority: wallet.publicKey,
       lottery: lotteryPda,
     })
-    .rpc();
+    .transaction();
+
+  const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.lastValidBlockHeight = lastValidBlockHeight;
+  tx.feePayer = wallet.publicKey;
+
+  const signedTx = await wallet.signTransaction(tx);
+  const sig = await program.provider.connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+  await program.provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+
+  return sig;
 };
 
 // ---- Payout winner ----
@@ -279,7 +315,7 @@ export const payoutWinner = async (
   lotteryCreator: PublicKey,
   platformFeeAccount: PublicKey
 ) => {
-  return await program.methods.payout()
+  const tx = await program.methods.payout()
     .accounts({
       authority: wallet.publicKey,
       lottery: lotteryPda,
@@ -289,5 +325,16 @@ export const payoutWinner = async (
       platformFeeAccount,
       systemProgram: SystemProgram.programId,
     })
-    .rpc();
+    .transaction();
+
+  const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.lastValidBlockHeight = lastValidBlockHeight;
+  tx.feePayer = wallet.publicKey;
+
+  const signedTx = await wallet.signTransaction(tx);
+  const sig = await program.provider.connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: false });
+  await program.provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+
+  return sig;
 };

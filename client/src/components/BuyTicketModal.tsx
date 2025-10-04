@@ -6,6 +6,7 @@ import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { PublicKey } from "@solana/web3.js"
 import { useState } from "react"
+import { toast } from "sonner"
 
 interface BuyTicketModalProps {
   isOpen: boolean
@@ -23,22 +24,23 @@ export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice
   const program = useProgram();
   const wallet = useAnchorWallet();
 
-  console.log("Lottery ID prop:", lotteryId);
   const handleWalletAction = () => {
     setVisible(true)
   }
 
+
 const handleBuyTickets = async () => {
+    if (loading) return;
   setLoading(true);
 
   try {
     if (!program || !wallet) {
-      console.log("Program or wallet not found");
+      toast.error("Program or wallet not found!");
       return;
     }
 
     if (!lotteryId) {
-      console.log("No lottery ID found");
+      toast.error("No lottery ID found!");
       return;
     }
 
@@ -46,18 +48,21 @@ const handleBuyTickets = async () => {
     const response = await buyTicket(program, lotteryId, wallet);
 
     if (response) {
-      console.log("🎟️ Tickets purchased successfully:", response);
+      toast.success("🎟️ Tickets purchased successfully!");
+      console.log("Transaction signature:", response);
       onClose();
     }
-  } catch (error) {
-    console.error("❌ Error purchasing tickets:", error);
+  } catch (error: any) {
+    // Display the error message in a toast
+    const message = error?.message || "Something went wrong while purchasing tickets!";
+    toast.error(`❌ ${message}`);
+    console.error("Error purchasing tickets:", error);
   } finally {
     setLoading(false);
   }
 };
 
 
-  console.log("Wallet public key:", publicKey ? publicKey.toBase58() : "No wallet connected")
 
   if (!isOpen) return null
 

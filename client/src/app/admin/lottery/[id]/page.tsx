@@ -11,6 +11,7 @@ import { useAnchorWallet } from "@solana/wallet-adapter-react"
 import {
   payoutWinner,
   fulfillRandomness,
+  getLotteryByPda,
 } from "@/lib/transactions"
 
 interface LotteryData {
@@ -84,21 +85,47 @@ export default function AdminLotteryPage() {
     }, 1000)
     return () => clearInterval(timer)
   }, [timeLeft])
+const declareWinner = async () => {
+  if (!program || !wallet || !id) return;
 
-  const declareWinner = async () => {
-    if (!program || !wallet || !id) return
-    try {
-      const randomness = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256))
-      const tx = await fulfillRandomness(program, new PublicKey(id), wallet, randomness)
-      toast.success("Winner declared successfully!")
-      console.log("Winner tx:", tx)
-      // Refresh lottery data after declaring winner
-      await fetchLottery()
-    } catch (error) {
-      console.error(error)
-      toast.error("Error declaring winner")
+  try {
+    // Fetch the lottery data first
+    const lottery = await getLotteryByPda(program, new PublicKey(id));
+    if (!lottery) {
+      toast.error("Lottery not found");
+      return;
     }
+
+    // Check if the connected wallet is the authority
+    const isAuthority = lottery.authority.toBase58() === wallet.publicKey.toBase58();
+    if (!isAuthority) {
+      toast.error("You are not the lottery authority!");
+      return;
+    }
+
+    // Check if the lottery is in the correct state
+    const lotteryState = Object.keys(lottery.state)[0]; // e.g., "waitingForTickets", "waitingForRandomness"
+    if (lotteryState !== "waitingForRandomness") {
+      toast.error(`Lottery not ready for randomness. Current state: ${lotteryState}`);
+      return;
+    }
+
+    // Generate randomness array
+    const randomness = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256));
+
+    // Call fulfillRandomness
+    const tx = await fulfillRandomness(program, new PublicKey(id), wallet, randomness);
+    toast.success("Winner declared successfully!");
+    console.log("Winner tx:", tx);
+
+    // Refresh lottery data
+    await fetchLottery();
+  } catch (error) {
+    console.error(error);
+    toast.error("Error declaring winner");
   }
+};
+
 
   const payout = async () => {
     if (!program || !wallet || !id || !lotteryData?.winner || !lotteryData?.authority) return
@@ -143,7 +170,7 @@ export default function AdminLotteryPage() {
   const totalPrizePool = lamportsToSol(lotteryData.totalPrizePool)
   const status = getLotteryStatus(lotteryData.state)
   const lotteryIdNumber = lotteryData.lotteryId?.toNumber() || 0
-
+  console.log("Lottery Data:", lotteryData)
   return (
     <main className="relative min-h-screen bg-black text-white font-sans">
       <Header />
