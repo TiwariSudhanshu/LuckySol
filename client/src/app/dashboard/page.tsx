@@ -95,208 +95,217 @@ export default function DashboardPage() {
     return new Date(ts * 1000).toLocaleDateString();
   };
 
-  const fetchlotteries = async () => {
+  const fetchlotteries = async (showToast = false) => {
     try {
       if (!program) {
-        toast.error("Program not initialized");
+        if (showToast) toast.error("Program not initialized");
         return;
       }
       setLoading(true);
+      console.log('Dashboard: Fetching all lotteries...');
       const data = await getAllLotteries(program);
 
-      const transformedLotteries = await Promise.all(
-        data.map(async (lotteryData: any, index: number) => {
-          try {
-            const lottery = await (program.account as any).lottery.fetch(
-              new PublicKey(lotteryData.id)
-            );
+      const transformedLotteries = data.map((lotteryData: any, index: number) => {
+        try {
+          // Use the data we already have from getAllLotteries instead of fetching again
+          const lottery = lotteryData._manualParse ? lotteryData : lotteryData;
 
-            const status = lottery.randomnessFulfilled ? "Completed" : "Open";
+          const status = lottery.randomnessFulfilled ? "Completed" : "Open";
 
-            return {
-              id: lotteryData.id,
-              name: `Lottery #${index + 1}`,
-              ticketPrice: lamportsToSolString(lottery.ticketPrice),
-              ticketPriceRaw: lottery.ticketPrice,
-              duration: formatDuration(lottery.duration),
-              ticketsSold: lottery.ticketsSold?.toString() || "0",
-              createdAt: formatDateOnly(lottery.createdAt),
-              status,
-              maxTickets: lottery.maxTickets?.toString() || "0",
-            };
-          } catch (error) {
-            console.error(`Error fetching lottery ${index}:`, error);
-            return null;
-          }
-        })
-      );
+          return {
+            id: lottery.id || lotteryData.id,
+            name: `Lottery #${lottery.lotteryId || index + 1}`,
+            ticketPrice: lamportsToSolString(lottery.ticketPrice),
+            ticketPriceRaw: lottery.ticketPrice,
+            duration: formatDuration(lottery.duration),
+            ticketsSold: lottery.ticketsSold?.toString() || "0",
+            createdAt: formatDateOnly(lottery.createdAt),
+            status,
+            maxTickets: lottery.maxTickets?.toString() || "0",
+          };
+        } catch (error) {
+          console.error(`Error transforming lottery ${index}:`, error, lotteryData);
+          return null;
+        }
+      });
 
-      setExploreLotteries(transformedLotteries.filter(Boolean));
-      toast.success("Lotteries fetched successfully");
+      const validLotteries = transformedLotteries.filter(Boolean);
+      setExploreLotteries(validLotteries);
+      console.log(`Dashboard: Loaded ${validLotteries.length} lotteries for explore`);
+      if (showToast) toast.success(`Loaded ${validLotteries.length} lotteries`);
     } catch (error) {
-      toast.error("Error fetching lotteries");
-      console.log("Error fetching lotteries:", error);
+      console.error("Error fetching lotteries:", error);
+      if (showToast) toast.error("Error fetching lotteries");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchCreatedLotteries = async () => {
+  const fetchCreatedLotteries = async (showToast = false) => {
     try {
       if (!program) {
-        toast.error("Program not initialized");
+        if (showToast) toast.error("Program not initialized");
         return;
       }
       if (!wallet) {
-        toast.error("Wallet not connected");
+        if (showToast) toast.error("Wallet not connected");
         return;
       }
       setLoading(true);
+      console.log('Dashboard: Fetching created lotteries...');
 
       const data = await getCreatedLotteries(program, wallet);
 
-      // Transform created lotteries to include the same fields as exploreLotteries
-      const transformed = await Promise.all(
-        data.map(async (lotteryData: any, index: number) => {
-          try {
-            // lotteryData should contain an id we can fetch
-            const lottery = await (program.account as any).lottery.fetch(
-              new PublicKey(lotteryData.id)
-            );
+      // Transform created lotteries using the data we already have
+      const transformed = data.map((lotteryData: any, index: number) => {
+        try {
+          // Use the data we already have from getCreatedLotteries instead of fetching again
+          const lottery = lotteryData._manualParse ? lotteryData : lotteryData;
 
-            const status = lottery.randomnessFulfilled ? "Completed" : "Open";
+          const status = lottery.randomnessFulfilled ? "Completed" : "Open";
 
-            return {
-              id: lotteryData.id,
-              // keep name if the on-chain account has a name, otherwise fallback
-              name:
-                (typeof lottery.name === "string" && lottery.name.trim() !== "")
-                  ? lottery.name
-                  : `Lottery #${index + 1}`,
-              ticketPrice: lamportsToSolString(lottery.ticketPrice),
-              ticketPriceRaw: lottery.ticketPrice,
-              duration: formatDuration(lottery.duration),
-              ticketsSold: lottery.ticketsSold?.toString() || "0",
-              createdAt: formatDateOnly(lottery.createdAt),
-              status,
-              maxTickets: lottery.maxTickets?.toString() || "0",
-              // preserve creator if present on-chain (stringified)
-              creator:
-                lottery.creator && typeof lottery.creator.toString === "function"
-                  ? lottery.creator.toString()
-                  : undefined,
-            };
-          } catch (error) {
-            console.error("Error fetching created lottery", lotteryData, error);
-            // Fallback: try to use fields returned from getCreatedLotteries if present,
-            // but ensure the fields our UI expects exist.
-            try {
-              return {
-                id: lotteryData.id || lotteryData.publicKey || `created-${index}`,
-                name: lotteryData.name || `Lottery #${index + 1}`,
-                ticketPrice:
-                  lotteryData.ticketPrice
-                    ? lamportsToSolString(lotteryData.ticketPrice)
-                    : "0 SOL",
-                ticketPriceRaw: lotteryData.ticketPrice || "0",
-                duration: lotteryData.duration
-                  ? formatDuration(lotteryData.duration)
-                  : "0s",
-                ticketsSold: lotteryData.ticketsSold?.toString() || "0",
-                createdAt: lotteryData.createdAt
-                  ? formatDateOnly(lotteryData.createdAt)
-                  : "N/A",
-                status: lotteryData.randomnessFulfilled ? "Completed" : "Open",
-                maxTickets: lotteryData.maxTickets?.toString() || "0",
-                creator: lotteryData.creator,
-              };
-            } catch (err) {
-              // final fallback
-              return {
-                id: lotteryData.id || `created-${index}`,
-                name: `Lottery #${index + 1}`,
-                ticketPrice: "0 SOL",
-                ticketPriceRaw: "0",
-                duration: "0s",
-                ticketsSold: "0",
-                createdAt: "N/A",
-                status: "Open",
-                maxTickets: "0",
-                creator: undefined,
-              };
-            }
-          }
-        })
-      );
+          return {
+            id: lottery.id || lotteryData.id,
+            name: `Lottery #${lottery.lotteryId || index + 1}`,
+            ticketPrice: lamportsToSolString(lottery.ticketPrice),
+            ticketPriceRaw: lottery.ticketPrice,
+            duration: formatDuration(lottery.duration),
+            ticketsSold: lottery.ticketsSold?.toString() || "0",
+            createdAt: formatDateOnly(lottery.createdAt),
+            status,
+            maxTickets: lottery.maxTickets?.toString() || "0",
+            creator: lottery.authority || lottery.creator,
+          };
+        } catch (error) {
+          console.error("Error transforming created lottery", lotteryData, error);
+          // Fallback using original data
+          return {
+            id: lotteryData.id || `created-${index}`,
+            name: `Lottery #${lotteryData.lotteryId || index + 1}`,
+            ticketPrice: lotteryData.ticketPrice
+              ? lamportsToSolString(lotteryData.ticketPrice)
+              : "0 SOL",
+            ticketPriceRaw: lotteryData.ticketPrice || "0",
+            duration: lotteryData.duration
+              ? formatDuration(lotteryData.duration)
+              : "0s",
+            ticketsSold: lotteryData.ticketsSold?.toString() || "0",
+            createdAt: lotteryData.createdAt
+              ? formatDateOnly(lotteryData.createdAt)
+              : "N/A",
+            status: lotteryData.randomnessFulfilled ? "Completed" : "Open",
+            maxTickets: lotteryData.maxTickets?.toString() || "0",
+            creator: lotteryData.authority || lotteryData.creator,
+          };
+        }
+      });
 
-      setCreatedLotteries(transformed.filter(Boolean));
-      toast.success("Created lotteries fetched successfully");
+      const validCreatedLotteries = transformed.filter(Boolean);
+      setCreatedLotteries(validCreatedLotteries);
+      console.log(`Dashboard: Loaded ${validCreatedLotteries.length} created lotteries`);
+      if (showToast) toast.success(`Loaded ${validCreatedLotteries.length} created lotteries`);
     } catch (error) {
-      toast.error("Error fetching created lotteries");
-      console.log("Error fetching created lotteries:", error);
+      console.error("Error fetching created lotteries:", error);
+      if (showToast) toast.error("Error fetching created lotteries");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMyTickets = async () => {
+  const fetchMyTickets = async (showToast = false) => {
     try {
       if (!program || !wallet) {
-        toast.error("Program not or Wallet not connected");
+        if (showToast) toast.error("Program not or Wallet not connected");
         return;
       }
       setTicketsLoading(true);
+      console.log('Dashboard: Fetching my tickets...');
 
       const tickets = await getMyTickets(program, wallet);
 
-      const ticketsWithLottery = await Promise.all(
-        tickets.map(async (ticket: any, index: number) => {
-          let lotteryName = `Lottery #${index + 1}`;
-          let lotteryStatus = "Unknown";
-          let purchasedAt = new Date();
+      const ticketsWithLottery = tickets.map((ticket: any, index: number) => {
+        let lotteryName = `Lottery #${index + 1}`;
+        let lotteryStatus = "Unknown";
+        let purchasedAt = new Date();
 
-          if (ticket.lottery) {
-            try {
-              const lotteryAccount = await (
-                program.account as any
-              ).lottery.fetch(new PublicKey(ticket.lottery));
-              lotteryName = lotteryAccount.name || lotteryName;
-            } catch (err) {
-              console.error("Error fetching lottery for ticket", ticket, err);
+        // Use lottery ID from ticket if available
+        if (ticket.lottery) {
+          try {
+            // Try to get lottery ID from the ticket's lottery field
+            if (typeof ticket.lottery === 'string') {
+              lotteryName = `Lottery ${ticket.lottery.slice(0, 8)}...`;
+            }
+          } catch (err) {
+            console.error("Error processing lottery for ticket", ticket, err);
+          }
+        }
+
+        // Parse purchased timestamp
+        try {
+          if (ticket.purchasedAt) {
+            if (typeof ticket.purchasedAt === 'string') {
+              purchasedAt = new Date(parseInt(ticket.purchasedAt) * 1000);
+            } else if (typeof ticket.purchasedAt.toNumber === "function") {
+              purchasedAt = new Date(ticket.purchasedAt.toNumber() * 1000);
+            } else if (typeof ticket.purchasedAt === 'number') {
+              purchasedAt = new Date(ticket.purchasedAt * 1000);
             }
           }
+        } catch (err) {
+          console.error("Error parsing purchasedAt for ticket", ticket, err);
+        }
 
-          if (
-            ticket.purchasedAt &&
-            typeof ticket.purchasedAt.toNumber === "function"
-          ) {
-            purchasedAt = new Date(ticket.purchasedAt.toNumber() * 1000);
-          }
-
-          return {
-            ...ticket,
-            lotteryName,
-            lotteryStatus,
-            purchasedAt,
-          };
-        })
-      );
+        return {
+          ...ticket,
+          lotteryName,
+          lotteryStatus,
+          purchasedAt,
+        };
+      });
 
       setMyTickets(ticketsWithLottery);
-      toast.success("Tickets fetched successfully");
+      console.log(`Dashboard: Loaded ${ticketsWithLottery.length} tickets`);
+      if (showToast) toast.success(`Loaded ${ticketsWithLottery.length} tickets`);
     } catch (error) {
       console.error("Error fetching tickets:", error);
-      toast.error("Error fetching tickets");
+      if (showToast) toast.error("Error fetching tickets");
     } finally {
       setTicketsLoading(false);
     }
   };
 
+  // Refresh all data
+  const refreshAllData = async () => {
+    console.log('Dashboard: Refreshing all data...');
+    await Promise.all([
+      fetchlotteries(true),
+      fetchCreatedLotteries(true),
+      fetchMyTickets(true)
+    ]);
+  };
+
   useEffect(() => {
-    fetchlotteries();
-    fetchCreatedLotteries();
-    fetchMyTickets();
-  }, [program]);
+    if (program) {
+      console.log('Dashboard: Initial data load...');
+      fetchlotteries();
+      fetchCreatedLotteries();
+      fetchMyTickets();
+    }
+  }, [program, wallet]);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    if (!program) return;
+    
+    const interval = setInterval(() => {
+      console.log('Dashboard: Auto-refreshing data...');
+      fetchlotteries();
+      fetchCreatedLotteries();
+      fetchMyTickets();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, [program, wallet]);
 
   const [activeTab, setActiveTab] = useState("explore");
 
@@ -460,14 +469,31 @@ export default function DashboardPage() {
                   "Manage the lotteries you've created."}
               </p>
             </div>
-            {activeTab === "created" && (
-              <Link
-                href="/create"
-                className="flex items-center gap-2 rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black hover:bg-lime-400"
+            <div className="flex items-center gap-3">
+              <button
+                onClick={refreshAllData}
+                disabled={loading || ticketsLoading}
+                className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                + Create New
-              </Link>
-            )}
+                <svg 
+                  className={`h-4 w-4 ${loading || ticketsLoading ? 'animate-spin' : ''}`} 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Refresh
+              </button>
+              {activeTab === "created" && (
+                <Link
+                  href="/create"
+                  className="flex items-center gap-2 rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black hover:bg-lime-400"
+                >
+                  + Create New
+                </Link>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -475,15 +501,24 @@ export default function DashboardPage() {
               <>
                 {loading ? (
                   <div className="col-span-full flex items-center justify-center py-12">
-                    <div className="text-zinc-400">Loading lotteries...</div>
+                    <div className="flex items-center gap-3 text-zinc-400">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-lime-500 border-t-transparent"></div>
+                      Loading lotteries...
+                    </div>
                   </div>
                 ) : exploreLotteries.length > 0 ? (
                   exploreLotteries.map((lottery) =>
                     renderLotteryCard(lottery, "explore")
                   )
                 ) : (
-                  <div className="col-span-full flex items-center justify-center py-12">
-                    <div className="text-zinc-400">No lotteries available</div>
+                  <div className="col-span-full flex flex-col items-center justify-center py-12">
+                    <div className="text-zinc-400 mb-2">No lotteries available</div>
+                    <button 
+                      onClick={() => refreshAllData()} 
+                      className="text-lime-400 hover:text-lime-300 text-sm"
+                    >
+                      Click to refresh
+                    </button>
                   </div>
                 )}
               </>
@@ -493,7 +528,10 @@ export default function DashboardPage() {
               <>
                 {ticketsLoading ? (
                   <div className="col-span-full flex items-center justify-center py-12">
-                    <div className="text-zinc-400">Loading tickets...</div>
+                    <div className="flex items-center gap-3 text-zinc-400">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-lime-500 border-t-transparent"></div>
+                      Loading tickets...
+                    </div>
                   </div>
                 ) : myTickets.length > 0 ? (
                   myTickets.map((ticket) => (
@@ -535,19 +573,49 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <div className="col-span-full flex items-center justify-center py-12">
-                    <div className="text-zinc-400">
+                  <div className="col-span-full flex flex-col items-center justify-center py-12">
+                    <div className="text-zinc-400 mb-2">
                       No tickets purchased yet.
                     </div>
+                    <button 
+                      onClick={() => refreshAllData()} 
+                      className="text-lime-400 hover:text-lime-300 text-sm"
+                    >
+                      Click to refresh
+                    </button>
                   </div>
                 )}
               </>
             )}
 
-            {activeTab === "created" &&
-              createdLotteries.map((lottery) =>
-                renderLotteryCard(lottery, "created")
-              )}
+            {activeTab === "created" && (
+              <>
+                {loading ? (
+                  <div className="col-span-full flex items-center justify-center py-12">
+                    <div className="flex items-center gap-3 text-zinc-400">
+                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-lime-500 border-t-transparent"></div>
+                      Loading created lotteries...
+                    </div>
+                  </div>
+                ) : createdLotteries.length > 0 ? (
+                  createdLotteries.map((lottery) =>
+                    renderLotteryCard(lottery, "created")
+                  )
+                ) : (
+                  <div className="col-span-full flex flex-col items-center justify-center py-12">
+                    <div className="text-zinc-400 mb-2">
+                      No lotteries created yet.
+                    </div>
+                    <button 
+                      onClick={() => refreshAllData()} 
+                      className="text-lime-400 hover:text-lime-300 text-sm"
+                    >
+                      Click to refresh
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </section>

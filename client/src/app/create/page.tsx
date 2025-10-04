@@ -4,6 +4,7 @@ import generateLotteryId from "@/lib/generateLotteryId"
 import { createLottery } from "@/lib/transactions"
 import { useProgram } from "@/lib/useProgram"
 import { useAnchorWallet } from "@solana/wallet-adapter-react"
+import { useRouter } from "next/navigation"
 import type React from "react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -18,6 +19,7 @@ export default function CreateLottery() {
 
   const program = useProgram()
   const wallet = useAnchorWallet()
+  const router = useRouter()
 
   // Convert days, hours, minutes to seconds
   const getDurationInSeconds = () => {
@@ -29,15 +31,48 @@ export default function CreateLottery() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Prevent double submissions
+    if (isLoading) {
+      console.log("Form already submitting, ignoring");
+      return;
+    }
+    
     setIsLoading(true)
 
     const lotteryId = generateLotteryId()
     const duration = getDurationInSeconds()
 
+    // Validation
+    if (duration < 60) {
+      toast.error("Lottery duration must be at least 1 minute")
+      setIsLoading(false)
+      return
+    }
+
+    if (Number(ticketPrice) < 0.001) {
+      toast.error("Ticket price must be at least 0.001 SOL")
+      setIsLoading(false)
+      return
+    }
+
+    if (Number(maxTickets) < 10 || Number(maxTickets) > 10000) {
+      toast.error("Max tickets must be between 10 and 10,000")
+      setIsLoading(false)
+      return
+    }
+
     console.log("Creating lottery with:", { lotteryId, ticketPrice, maxTickets, duration })
+
+    // Show processing toast
+    const processingToast = toast.loading("🎲 Creating lottery...", {
+      description: `Lottery ID: ${lotteryId}`,
+      duration: 30000 // 30 second timeout
+    });
 
     try {
       if (!program || !wallet) {
+        toast.dismiss(processingToast);
         toast.error("Wallet or program not ready")
         return
       }
@@ -46,23 +81,53 @@ export default function CreateLottery() {
         lotteryId,
         Number(ticketPrice),
         Number(maxTickets),
-        duration, // pass duration in seconds
+        duration,
         program,
         wallet
       )
 
       if (tx) {
+        // Dismiss processing toast and show success
+        toast.dismiss(processingToast);
+        toast.success("🎉 Lottery created successfully!", {
+          description: `Lottery ID: ${lotteryId}`,
+        });
+        
         console.log("Transaction sent:", tx)
-        toast.success("Lottery created successfully!")
+        
+        // Reset form
         setTicketPrice("")
         setMaxTickets("")
         setDays("0")
         setHours("0")
         setMinutes("0")
+        
+        // Navigate to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Dismiss processing toast
+      toast.dismiss(processingToast);
+      
+      // More specific error handling
+      let errorMessage = "Failed to create lottery";
+      
+      if (error.message.includes("already exists")) {
+        errorMessage = "Lottery ID already exists. Please try again.";
+      } else if (error.message.includes("Insufficient")) {
+        errorMessage = "Insufficient SOL to create lottery";
+      } else if (error.message.includes("duplicate")) {
+        errorMessage = "Duplicate transaction detected. Please wait...";
+      } else if (error.message.includes("network")) {
+        errorMessage = "Network error. Please try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       console.error("Error creating lottery:", error)
-      toast.error("Failed to create lottery")
+      toast.error(`❌ ${errorMessage}`)
     } finally {
       setIsLoading(false)
     }

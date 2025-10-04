@@ -30,7 +30,12 @@ export default function BuyTicketModal({ isOpen, onClose, lotteryId, ticketPrice
 
 
 const handleBuyTickets = async () => {
-    if (loading) return;
+  // Prevent double-clicks and multiple submissions
+  if (loading) {
+    console.log("Transaction already in progress, ignoring click");
+    return;
+  }
+  
   setLoading(true);
 
   try {
@@ -44,18 +49,58 @@ const handleBuyTickets = async () => {
       return;
     }
 
-    // Call the rewritten buyTicket function
-    const response = await buyTicket(program, lotteryId, wallet);
-
-    if (response) {
-      toast.success("🎟️ Tickets purchased successfully!");
-      console.log("Transaction signature:", response);
-      onClose();
+    if (!connected) {
+      toast.error("Wallet not connected!");
+      return;
     }
+
+    // Show processing toast
+    const processingToast = toast.loading("🎟️ Processing ticket purchase...", {
+      duration: 30000 // 30 second timeout
+    });
+
+    try {
+      // Call the improved buyTicket function
+      const response = await buyTicket(program, lotteryId, wallet);
+
+      if (response) {
+        // Dismiss processing toast and show success
+        toast.dismiss(processingToast);
+        toast.success("� Ticket purchased successfully!", {
+          description: `Transaction: ${response.slice(0, 8)}...${response.slice(-8)}`
+        });
+        console.log("Transaction signature:", response);
+        
+        // Close modal after a brief delay to show success message
+        setTimeout(() => {
+          onClose();
+        }, 1500);
+      }
+    } catch (txError: any) {
+      // Dismiss processing toast
+      toast.dismiss(processingToast);
+      throw txError;
+    }
+    
   } catch (error: any) {
-    // Display the error message in a toast
-    const message = error?.message || "Something went wrong while purchasing tickets!";
-    toast.error(`❌ ${message}`);
+    // More specific error handling
+    let errorMessage = "Something went wrong while purchasing tickets!";
+    
+    if (error.message.includes("Insufficient SOL")) {
+      errorMessage = error.message;
+    } else if (error.message.includes("sold out")) {
+      errorMessage = "This lottery is sold out!";
+    } else if (error.message.includes("no longer accepting")) {
+      errorMessage = "This lottery has ended!";
+    } else if (error.message.includes("duplicate")) {
+      errorMessage = "Transaction already submitted. Please wait...";
+    } else if (error.message.includes("network")) {
+      errorMessage = "Network error. Please try again.";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(`❌ ${errorMessage}`);
     console.error("Error purchasing tickets:", error);
   } finally {
     setLoading(false);
@@ -158,10 +203,17 @@ const handleBuyTickets = async () => {
             <button
               type="button"
               onClick={handleBuyTickets}
-              disabled={!connected}
-              className="flex-1 rounded-2xl  border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold cursor-pointer text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!connected || loading}
+              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold cursor-pointer text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-900 transition-colors"
             >
-              {loading ? "Processing..." : "Confirm Purchase"}
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-lime-500 border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </div>
+              ) : (
+                "Confirm Purchase"
+              )}
             </button>
           </div>
 
