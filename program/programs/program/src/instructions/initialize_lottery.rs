@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use crate::contexts::InitializeLottery;
-use crate::state::LotteryState;
 
 pub fn initialize_lottery_handler(
     ctx: Context<InitializeLottery>,
@@ -18,7 +17,6 @@ pub fn initialize_lottery_handler(
     lottery.max_tickets = max_tickets;
     lottery.tickets_sold = 0;
     lottery.total_prize_pool = 0;
-    lottery.state = LotteryState::WaitingForTickets;
     lottery.winner = None;
     lottery.created_at = clock.unix_timestamp;
     lottery.duration = duration; 

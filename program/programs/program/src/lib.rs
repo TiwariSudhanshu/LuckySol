@@ -9,7 +9,7 @@ pub mod errors;
 use instructions::*;
 use contexts::*;
 
-declare_id!("9hH3njmbadFWYXE5J9HB7ewvKBpqxYJd47BdecmQEGmt");
+declare_id!("2zQLcDy3RvTNjJ2J7pjuCA58VLuoNrKgJv3Musc8qFVP");
 
 #[program]
 pub mod lottery {

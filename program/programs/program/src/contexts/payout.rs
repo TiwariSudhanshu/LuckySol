@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{Lottery, Ticket, LotteryState};
+use crate::state::{Lottery, Ticket};
 use crate::PLATFORM_FEE_WALLET;
 
 #[derive(Accounts)]
@@ -10,7 +10,6 @@ pub struct Payout<'info> {
     #[account(
         mut,
         has_one = authority,
-        constraint = lottery.state == LotteryState::WaitingForPayout
     )]
     pub lottery: Account<'info, Lottery>,
     

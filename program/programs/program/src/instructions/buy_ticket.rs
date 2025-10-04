@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use crate::contexts::BuyTicket;
-use crate::state::LotteryState;
 use crate::errors::LotteryError;
 
 pub fn buy_ticket_handler(
@@ -12,12 +11,10 @@ pub fn buy_ticket_handler(
     let ticket = &mut ctx.accounts.ticket;
 
     require!(lottery.lottery_id == lottery_id, LotteryError::InvalidLotteryId);
-    require!(lottery.state == LotteryState::WaitingForTickets, LotteryError::LotteryNotActive);
 
     // Check if lottery expired by time
     let now = Clock::get()?.unix_timestamp;
     if now >= lottery.created_at + lottery.duration {
-        lottery.state = LotteryState::WaitingForRandomness;
         return err!(LotteryError::LotteryClosed);
     }
 
@@ -47,7 +44,6 @@ pub fn buy_ticket_handler(
 
     // If max tickets reached → close buying
     if lottery.tickets_sold == lottery.max_tickets {
-        lottery.state = LotteryState::WaitingForRandomness;
         msg!("All tickets sold! Lottery {} is now waiting for randomness.", lottery_id);
     }
 

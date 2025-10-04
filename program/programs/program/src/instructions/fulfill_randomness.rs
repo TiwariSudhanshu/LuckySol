@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use crate::contexts::FulfillRandomness;
-use crate::state::LotteryState;
 use crate::errors::LotteryError;
 
 pub fn fulfill_randomness_handler(
@@ -9,10 +8,6 @@ pub fn fulfill_randomness_handler(
 ) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
 
-    require!(
-        lottery.state == LotteryState::WaitingForRandomness,
-        LotteryError::InvalidLotteryState
-    );
     require!(!lottery.randomness_fulfilled, LotteryError::RandomnessAlreadyFulfilled);
     require!(lottery.tickets_sold > 0, LotteryError::NoTicketsSold);
 
@@ -26,7 +21,6 @@ pub fn fulfill_randomness_handler(
 
     lottery.winner = Some(winning_ticket_number);
     lottery.randomness_fulfilled = true;
-    lottery.state = LotteryState::WaitingForPayout;
 
     msg!("Randomness fulfilled. Winning ticket number: {}", winning_ticket_number);
 

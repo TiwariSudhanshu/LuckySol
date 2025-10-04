@@ -8,7 +8,6 @@ pub struct Lottery {
     pub max_tickets: u32,
     pub tickets_sold: u32,
     pub total_prize_pool: u64,
-    pub state: LotteryState,
     pub winner: Option<u32>,  
     pub created_at: i64,
     pub duration: i64,        
@@ -24,7 +23,6 @@ impl Space for Lottery {
         4 +  // max_tickets
         4 +  // tickets_sold
         8 +  // total_prize_pool
-        1 +  // state
         (1 + 4) + // winner (Option<u32>)
         8 +  // created_at
         8 +  // duration
@@ -32,10 +30,4 @@ impl Space for Lottery {
         1;   // bump
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
-pub enum LotteryState {
-    WaitingForTickets,
-    WaitingForRandomness,
-    WaitingForPayout,
-    PaidOut,
-}
+

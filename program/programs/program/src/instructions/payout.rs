@@ -1,17 +1,12 @@
 use anchor_lang::prelude::*;
 use crate::contexts::Payout;
-use crate::state::LotteryState;
 use crate::errors::LotteryError;
 
 pub fn payout_handler(ctx: Context<Payout>) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
     let winner_ticket = &ctx.accounts.winner_ticket;
 
-    // ✅ state should be WaitingForPayout, not Closed
-    require!(
-        lottery.state == LotteryState::WaitingForPayout,
-        LotteryError::InvalidLotteryState
-    );
+
     require!(lottery.winner.is_some(), LotteryError::NoWinner);
     require!(
         winner_ticket.ticket_number == lottery.winner.unwrap(),
@@ -57,7 +52,6 @@ pub fn payout_handler(ctx: Context<Payout>) -> Result<()> {
         .try_borrow_mut_lamports()? += platform_amount;
 
     // Update lottery state
-    lottery.state = LotteryState::PaidOut;
     lottery.total_prize_pool = 0;
 
     msg!("Payout completed with strict 90/5/5 distribution:");
