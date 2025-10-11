@@ -8,35 +8,31 @@ import { useProgram } from "@/lib/useProgram"
 import { toast } from "sonner"
 import { PublicKey } from "@solana/web3.js"
 import { useAnchorWallet } from "@solana/wallet-adapter-react"
+import * as anchor from "@coral-xyz/anchor"
 import {
   payoutWinner,
   fulfillRandomness,
   getLotteryByPda,
+  formatDuration,
 } from "@/lib/transactions"
 
 interface LotteryData {
-  authority: PublicKey
+  authority: string
   bump: number
-  createdAt: number
+  createdAt: string
   id: string
-  lotteryId: any
+  lotteryId: string
   maxTickets: number
   randomnessFulfilled: boolean
-  state: any
-  ticketPrice: any
+  ticketPrice: string
   ticketsSold: number
-  totalPrizePool: any
-  winner: PublicKey | null
-  duration: number 
+  totalPrizePool: string
+  winner: number | null
+  duration: string
+  state?: string // Add state field for compatibility
 }
 
-const formatTime = (seconds: number) => {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  return `${d}d ${h}h ${m}m ${s}s`;
-};
+// formatTime is now imported as formatDuration from transactions
 
 export default function AdminLotteryPage() {
   const params = useParams()
@@ -55,16 +51,27 @@ export default function AdminLotteryPage() {
     if (!id) return toast.error("Lottery ID not found in URL")
 
     try {
-      const lotteryAccount = await (program.account as any).lottery.fetch(
-        new PublicKey(id)
-      )
-      setLotteryData(lotteryAccount)
+      console.log(`Admin: Fetching lottery details for ID: ${id}`);
+      const lotteryAccount = await getLotteryByPda(program, new PublicKey(id as string));
+      
+      if (!lotteryAccount) {
+        toast.error("Lottery not found")
+        return
+      }
+      
+      console.log('Admin: Fetched lottery data:', lotteryAccount);
+      setLotteryData({
+        ...lotteryAccount,
+        id: lotteryAccount.id
+      })
       setLoading(false)
       toast.success("Lottery fetched successfully!")
 
       // Set countdown timer
       const now = Math.floor(Date.now() / 1000)
-      const endTime = lotteryAccount.createdAt.toNumber() + lotteryAccount.duration
+      const createdAt = parseInt(lotteryAccount.createdAt)
+      const duration = parseInt(lotteryAccount.duration)
+      const endTime = createdAt + duration
       setTimeLeft(Math.max(endTime - now, 0))
     } catch (error) {
       console.error("Error fetching lottery:", error)
@@ -97,16 +104,34 @@ const declareWinner = async () => {
     }
 
     // Check if the connected wallet is the authority
-    const isAuthority = lottery.authority.toBase58() === wallet.publicKey.toBase58();
+    const isAuthority = lottery.authority === wallet.publicKey.toBase58();
     if (!isAuthority) {
       toast.error("You are not the lottery authority!");
       return;
     }
 
-    // Check if the lottery is in the correct state
-    const lotteryState = Object.keys(lottery.state)[0]; // e.g., "waitingForTickets", "waitingForRandomness"
-    if (lotteryState !== "waitingForRandomness") {
-      toast.error(`Lottery not ready for randomness. Current state: ${lotteryState}`);
+    // Check if randomness was already fulfilled
+    if (lottery.randomnessFulfilled) {
+      toast.error("Randomness already fulfilled for this lottery");
+      return;
+    }
+
+    // Check if the lottery is ready for randomness (has sold tickets and either reached max or expired)
+    if (lottery.ticketsSold === 0) {
+      toast.error("Cannot declare winner: No tickets sold");
+      return;
+    }
+
+    // Check if lottery has reached max tickets or has expired
+    const now = Math.floor(Date.now() / 1000);
+    const createdAt = parseInt(lottery.createdAt);
+    const duration = parseInt(lottery.duration);
+    const endTime = createdAt + duration;
+    const hasExpired = now >= endTime;
+    const isMaxTickets = lottery.ticketsSold >= lottery.maxTickets;
+
+    if (!hasExpired && !isMaxTickets) {
+      toast.error("Lottery not ready for winner declaration. Must either reach max tickets or expire.");
       return;
     }
 
@@ -133,12 +158,36 @@ const declareWinner = async () => {
     if (!platformFeeAccount) return console.error("Platform fee account not set")
 
     try {
+      // Derive the winner ticket PDA based on lottery and winner ticket number
+      const lotteryPda = new PublicKey(id);
+      const winnerTicketNumber = lotteryData.winner; // This should be the ticket number
+      
+      const [winnerTicketPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("ticket"),
+          lotteryPda.toBuffer(),
+          new anchor.BN(winnerTicketNumber).toArrayLike(Buffer, "le", 4),
+        ],
+        program.programId
+      );
+
+      // Get the actual winner's public key from the ticket account
+      const winnerTicketAccount = await program.provider.connection.getAccountInfo(winnerTicketPda);
+      if (!winnerTicketAccount) {
+        throw new Error("Winner ticket account not found");
+      }
+
+      // Parse the ticket to get the winner's public key
+      // The player public key is at offset 8 + 32 = 40 in the ticket account
+      const winnerPublicKey = new PublicKey(winnerTicketAccount.data.slice(40, 72));
+
       const tx = await payoutWinner(
         program,
-        new PublicKey(id),
+        lotteryPda,
         wallet,
-        lotteryData.winner,
-        lotteryData.authority,
+        winnerTicketPda,
+        winnerPublicKey,
+        new PublicKey(lotteryData.authority),
         new PublicKey(platformFeeAccount)
       )
       toast.success("Winner paid out successfully!")
@@ -152,24 +201,38 @@ const declareWinner = async () => {
   }
 
   const lamportsToSol = (lamports: any) => {
-    if (!lamports || typeof lamports.toNumber !== "function") return 0
-    return lamports.toNumber() / 1_000_000_000
+    if (!lamports) return 0
+    // Handle both string and number formats
+    const lamportsValue = typeof lamports === 'string' ? parseInt(lamports) : 
+                         typeof lamports === 'number' ? lamports :
+                         typeof lamports.toNumber === 'function' ? lamports.toNumber() : 0
+    return lamportsValue / 1_000_000_000
   }
 
-  const getLotteryStatus = (state: any) => {
-    if (state?.waitingForTickets) return "Open"
-    if (state?.drawing) return "Drawing"
-    if (state?.completed) return "Completed"
-    return "Unknown"
-  }
+
 
   if (loading) return <LoadingScreen />
   if (!lotteryData) return <ErrorScreen fetchLottery={fetchLottery} />
 
   const ticketPrice = lamportsToSol(lotteryData.ticketPrice)
   const totalPrizePool = lamportsToSol(lotteryData.totalPrizePool)
-  const status = getLotteryStatus(lotteryData.state)
-  const lotteryIdNumber = lotteryData.lotteryId?.toNumber() || 0
+  const lotteryIdNumber = parseInt(lotteryData.lotteryId) || 0
+  
+  // Determine status based on available data
+  let status = "Open"
+  if (lotteryData.randomnessFulfilled) {
+    status = "Completed"
+  } else if (lotteryData.ticketsSold >= lotteryData.maxTickets) {
+    status = "Drawing"
+  } else {
+    // Check if lottery has expired
+    const createdAtMs = parseInt(lotteryData.createdAt) * 1000
+    const durationMs = parseInt(lotteryData.duration) * 1000
+    const endTime = createdAtMs + durationMs
+    if (Date.now() > endTime) {
+      status = "Drawing"
+    }
+  }
   console.log("Lottery Data:", lotteryData)
   return (
     <main className="relative min-h-screen bg-black text-white font-sans">
@@ -351,11 +414,11 @@ const LotteryDetails = ({ lotteryData, ticketPrice, totalPrizePool, timeLeft, lo
         </div>
       </div>
 
-      {lotteryData.winner && (
+      {lotteryData.winner !== null && lotteryData.winner !== undefined && (
         <div>
-          <label className="text-xs text-zinc-400 uppercase tracking-wide">Winner</label>
+          <label className="text-xs text-zinc-400 uppercase tracking-wide">Winner Ticket #</label>
           <div className="mt-1 p-3 bg-green-800/20 rounded-lg border border-green-700">
-            <code className="text-sm text-green-200 break-all">{lotteryData.winner.toString()}</code>
+            <code className="text-sm text-green-200 break-all">Ticket #{lotteryData.winner}</code>
           </div>
         </div>
       )}
@@ -384,7 +447,7 @@ const LotteryDetails = ({ lotteryData, ticketPrice, totalPrizePool, timeLeft, lo
 
       <div>
         <label className="text-xs text-zinc-400 uppercase tracking-wide">Time Remaining</label>
-        <div className="mt-1 text-lg font-semibold text-orange-400">{formatTime(timeLeft)}</div>
+        <div className="mt-1 text-lg font-semibold text-orange-400">{formatDuration(timeLeft)}</div>
       </div>
     </div>
   </div>

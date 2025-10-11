@@ -1,7 +1,7 @@
 "use client"
 
 import generateLotteryId from "@/lib/generateLotteryId"
-import { createLottery } from "@/lib/transactions"
+import { createLottery, formatDuration } from "@/lib/transactions"
 import { useProgram } from "@/lib/useProgram"
 import { useAnchorWallet } from "@solana/wallet-adapter-react"
 import { useRouter } from "next/navigation"
@@ -246,7 +246,7 @@ export default function CreateLottery() {
                   </div>
                   <div className="flex justify-between">
                     <span>Duration:</span>
-                    <span className="text-white">{getDurationInSeconds()}s</span>
+                    <span className="text-white">{formatDuration(getDurationInSeconds())}</span>
                   </div>
                   <div className="flex justify-between border-t border-zinc-700 pt-2 mt-2">
                     <span className="font-semibold">Max Prize Pool:</span>

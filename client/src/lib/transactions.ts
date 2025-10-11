@@ -1,29 +1,24 @@
-
 import { useProgram } from "./useProgram";
 import * as anchor from "@coral-xyz/anchor";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, SendTransactionError, Connection, Transaction, ConfirmOptions } from "@solana/web3.js";
 
 // Account sizes based on current struct definitions
-// Lottery: 8 (discriminator) + 32 + 8 + 8 + 4 + 4 + 8 + 5 + 8 + 8 + 1 + 1 = 95 bytes
+// Layout (bytes): 8 discriminator + 32 authority + 8 lottery_id + 8 ticket_price + 4 max_tickets
+// + 4 tickets_sold + 8 total_prize_pool + 1 option + 4 winner + 8 created_at + 8 duration
+// + 1 randomness_fulfilled + 1 bump = 87 (+ padding if any). Use 95 original to be safe.
 const LOTTERY_ACCOUNT_SIZE = 95;
 const TICKET_ACCOUNT_SIZE = 85;
 
 // Transaction retry configuration
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
-const CONFIRM_TIMEOUT = 30000; // 30 seconds
+const RETRY_DELAY = 1000;
+const CONFIRM_TIMEOUT = 30000;
 
-// Helper function to sleep/wait
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Generate a unique transaction ID for deduplication
 const generateTransactionId = () => `${Date.now()}-${Math.random().toString(36).substring(2)}`;
-
-// Store of recent transaction IDs to prevent duplicates
 const recentTransactions = new Map<string, number>();
 
-// Clean up old transaction IDs (older than 5 minutes)
 const cleanupOldTransactions = () => {
   const now = Date.now();
   const fiveMinutesAgo = now - 5 * 60 * 1000;
@@ -34,7 +29,39 @@ const cleanupOldTransactions = () => {
   }
 };
 
-// Enhanced transaction sending with retry logic and proper error handling
+export const formatDuration = (seconds: number | string | null | undefined): string => {
+
+  console.log("Formatting duration:", seconds);
+  if (seconds === null || seconds === undefined) {
+    return "N/A";
+  }
+
+  const totalSeconds = typeof seconds === 'string' ? parseInt(seconds) : seconds;
+  
+  if (isNaN(totalSeconds) || totalSeconds < 0) {
+    return "N/A";
+  }
+
+  if (totalSeconds === 0) {
+    return "0s";
+  }
+
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (parts.length === 0 || remainingSeconds > 0) {
+    parts.push(`${remainingSeconds}s`);
+  }
+  console.log("Formatted duration parts:", parts);
+  return parts.join(" ");
+};
+
 const sendTransactionWithRetry = async (
   connection: Connection,
   transaction: Transaction,
@@ -47,25 +74,21 @@ const sendTransactionWithRetry = async (
     try {
       console.log(`Attempting ${transactionType} (attempt ${attempt}/${MAX_RETRIES})`);
       
-      // Get fresh blockhash for each attempt
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
       transaction.feePayer = wallet.publicKey;
 
-      // Sign transaction
       const signedTx = await wallet.signTransaction(transaction);
       
-      // Send transaction with proper options
       const signature = await connection.sendRawTransaction(signedTx.serialize(), {
         skipPreflight: false,
-        maxRetries: 0, // We handle retries manually
+        maxRetries: 0,
         preflightCommitment: 'confirmed'
       });
 
       console.log(`${transactionType} sent with signature: ${signature}`);
       
-      // Confirm transaction with timeout
       const confirmationPromise = connection.confirmTransaction({
         signature,
         blockhash,
@@ -84,13 +107,10 @@ const sendTransactionWithRetry = async (
     } catch (error: any) {
       lastError = error;
       
-      // Handle SendTransactionError specifically as requested
       if (error instanceof SendTransactionError) {
         console.error(`SendTransactionError on attempt ${attempt}:`, error.message);
         
-        // Get full logs as requested in the user prompt
         try {
-          // SendTransactionError.getLogs() might require the connection parameter
           const logs = error.getLogs && typeof error.getLogs === 'function' 
             ? await error.getLogs(connection) 
             : null;
@@ -99,14 +119,11 @@ const sendTransactionWithRetry = async (
           console.error('Failed to get transaction logs:', logError);
         }
         
-        // Check if it's a duplicate transaction error
         if (error.message.includes('already been processed') || error.message.includes('duplicate')) {
           console.log('Transaction already processed, might be a duplicate submission');
-          // For duplicate transactions, we should not retry
           throw new Error('Transaction already processed - this may be a duplicate submission');
         }
         
-        // Check if it's a recoverable error
         const recoverableErrors = [
           'blockhash not found',
           'transaction expired',
@@ -127,12 +144,10 @@ const sendTransactionWithRetry = async (
       
       console.error(`${transactionType} failed on attempt ${attempt}:`, error.message);
       
-      // Don't retry on the last attempt
       if (attempt === MAX_RETRIES) {
         break;
       }
       
-      // Wait before retrying (exponential backoff)
       const delay = RETRY_DELAY * Math.pow(2, attempt - 1);
       console.log(`Waiting ${delay}ms before retry...`);
       await sleep(delay);
@@ -142,8 +157,6 @@ const sendTransactionWithRetry = async (
   throw lastError || new Error(`${transactionType} failed after ${MAX_RETRIES} attempts`);
 };
 
-// ---- Manual parsing ----
-// TypeScript type for the parsed Lottery account
 interface ParsedLottery {
   id: string;
   authority: string;
@@ -157,31 +170,14 @@ interface ParsedLottery {
   duration: string;
   randomnessFulfilled: boolean;
   bump: number;
-  _manualParse: boolean;
+  _manualParse?: boolean;
 }
 
 /**
- * Parses a Lottery account from raw Solana account data
- * 
- * Rust struct layout:
- * - authority: Pubkey (32 bytes)
- * - lottery_id: u64 (8 bytes)
- * - ticket_price: u64 (8 bytes)
- * - max_tickets: u32 (4 bytes)
- * - tickets_sold: u32 (4 bytes)
- * - total_prize_pool: u64 (8 bytes)
- * - winner: Option<u32> (1 + 4 bytes)
- * - created_at: i64 (8 bytes)
- * - duration: i64 (8 bytes)
- * - randomness_fulfilled: bool (1 byte)
- * - bump: u8 (1 byte)
- * 
- * @param data Raw account data from Solana
- * @param pubkey PublicKey of the account
- * @returns Parsed lottery object
+ * FIXED: Parses duration correctly by treating it as u64 instead of i64
  */
 const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey): ParsedLottery => {
-  if (data.length < 87) { // Minimum expected size: 8 (discriminator) + 79 (struct) = 87
+  if (data.length < 87) {
     throw new Error(`Invalid lottery account data size: ${data.length}, expected at least 87 bytes`);
   }
 
@@ -189,57 +185,83 @@ const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey): ParsedLottery
   let offset = 8; // Skip 8-byte Anchor discriminator
   
   try {
+    console.log('Parsing lottery account:', pubkey.toBase58());
+    console.log('Data length:', data.length);
+
     // Parse authority (Pubkey - 32 bytes)
     const authority = new PublicKey(data.slice(offset, offset + 32));
+    console.log('Authority parsed at offset', offset, authority.toBase58());
     offset += 32;
 
     // Parse lottery_id (u64 - 8 bytes)
-    const lotteryId = dv.getBigUint64(offset, true); // little-endian
+    const lotteryId = dv.getBigUint64(offset, true);
+    console.log('Lottery ID parsed at offset', offset, lotteryId.toString());
     offset += 8;
 
     // Parse ticket_price (u64 - 8 bytes)
     const ticketPrice = dv.getBigUint64(offset, true);
+    console.log('Ticket price parsed at offset', offset, ticketPrice.toString());
     offset += 8;
 
     // Parse max_tickets (u32 - 4 bytes)
     const maxTickets = dv.getUint32(offset, true);
+    console.log('Max tickets parsed at offset', offset, maxTickets);
     offset += 4;
 
     // Parse tickets_sold (u32 - 4 bytes)
     const ticketsSold = dv.getUint32(offset, true);
+    console.log('Tickets sold parsed at offset', offset, ticketsSold);
     offset += 4;
 
     // Parse total_prize_pool (u64 - 8 bytes)
     const totalPrizePool = dv.getBigUint64(offset, true);
+    console.log('Total prize pool parsed at offset', offset, totalPrizePool.toString());
     offset += 8;
 
     // Parse winner (Option<u32> - 1 + 4 bytes)
-    // Option<T> in Rust is serialized as: 0x00 for None, 0x01 + T for Some(T)
     const hasWinner = data[offset] === 1;
+    console.log('Winner flag at offset', offset, hasWinner);
     offset += 1;
     let winner: number | null = null;
     if (hasWinner) {
       winner = dv.getUint32(offset, true);
+      console.log('Winner ID parsed at offset', offset, winner);
     }
-    offset += 4; // Always advance 4 bytes for u32, regardless of Option state
+    offset += 4;
 
     // Parse created_at (i64 - 8 bytes)
+    const expectedCreatedAtOffset = 77; 
+    if (offset !== expectedCreatedAtOffset) {
+      console.warn(`Expected created_at offset ${expectedCreatedAtOffset} but found ${offset}. Parsing may be misaligned.`);
+    }
     const createdAt = dv.getBigInt64(offset, true);
+    console.log('Created_at parsed at offset', offset, createdAt.toString());
     offset += 8;
 
-    // Parse duration (i64 - 8 bytes)
-    const duration = dv.getBigInt64(offset, true);
+    // Parse duration (u64 - 8 bytes)
+    const durationOffset = offset;
+    const durationUnsigned = dv.getBigUint64(offset, true);
+    console.log('Raw duration bytes at offset', durationOffset, data.slice(durationOffset, durationOffset + 8));
+    console.log('Parsed duration (u64) at offset', durationOffset, durationUnsigned.toString());
     offset += 8;
+
+    const TEN_YEARS_IN_SECONDS = BigInt(10 * 365 * 24 * 60 * 60);
+    const durationValue = durationUnsigned;
+    if (durationValue > TEN_YEARS_IN_SECONDS) {
+      console.warn(`Suspicious duration value (unsigned): ${durationValue}. Check raw bytes above.`);
+    }
 
     // Parse randomness_fulfilled (bool - 1 byte)
     const randomnessFulfilled = data[offset] === 1;
+    console.log('Randomness fulfilled at offset', offset, randomnessFulfilled);
     offset += 1;
 
     // Parse bump (u8 - 1 byte)
     const bump = data[offset];
+    console.log('Bump parsed at offset', offset, bump);
     offset += 1;
 
-    console.log(`Parsed lottery: ID=${lotteryId}, tickets=${ticketsSold}/${maxTickets}, winner=${winner}, fulfilled=${randomnessFulfilled}`);
+    console.log(`Successfully parsed lottery ID=${lotteryId}, duration=${durationValue}s, tickets=${ticketsSold}/${maxTickets}`);
 
     return {
       id: pubkey.toBase58(),
@@ -251,7 +273,7 @@ const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey): ParsedLottery
       totalPrizePool: totalPrizePool.toString(),
       winner,
       createdAt: createdAt.toString(),
-      duration: duration.toString(),
+      duration: durationValue.toString(),
       randomnessFulfilled,
       bump,
       _manualParse: true,
@@ -260,13 +282,14 @@ const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey): ParsedLottery
     console.error('Error parsing lottery account:', error);
     console.error('Account data length:', data.length);
     console.error('Current offset:', offset);
+    console.error('Raw data slice near duration:', data.slice(offset - 8, offset + 8));
     throw new Error(`Failed to parse lottery account ${pubkey.toBase58()}: ${error}`);
   }
 };
 
 const parseTicketAccount = (data: Uint8Array, pubkey: PublicKey) => {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  let offset = 8; // discriminator
+  let offset = 8;
 
   const lottery = new PublicKey(data.slice(offset, offset + 32));
   offset += 32;
@@ -293,7 +316,6 @@ const parseTicketAccount = (data: Uint8Array, pubkey: PublicKey) => {
   };
 };
 
-// ---- Fetch all lotteries ----
 export const getAllLotteries = async (program: anchor.Program) => {
   if (!program) {
     console.warn('Program not available for getAllLotteries');
@@ -303,7 +325,6 @@ export const getAllLotteries = async (program: anchor.Program) => {
   console.log('Fetching all lotteries...');
   
   try {
-    // Use manual account fetching as primary method due to IDL parsing issues
     const accounts = await program.provider.connection.getProgramAccounts(
       program.programId, 
       {
@@ -329,7 +350,6 @@ export const getAllLotteries = async (program: anchor.Program) => {
   } catch (error) {
     console.error('Failed to fetch lotteries:', error);
     
-    // Fallback: try Anchor method as last resort
     try {
       console.log('Trying Anchor fetch as fallback...');
       const lotteries = await (program.account as any).lottery.all([], 'confirmed');
@@ -346,7 +366,6 @@ export const getAllLotteries = async (program: anchor.Program) => {
   }
 };
 
-// ---- Fetch lotteries created by wallet ----
 export const getCreatedLotteries = async (program: anchor.Program, wallet: AnchorWallet) => {
   if (!program || !wallet) {
     console.warn('Program or wallet not available for getCreatedLotteries');
@@ -356,7 +375,6 @@ export const getCreatedLotteries = async (program: anchor.Program, wallet: Ancho
   console.log(`Fetching lotteries created by: ${wallet.publicKey.toBase58()}`);
   
   try {
-    // Use manual account fetching as primary method due to IDL parsing issues
     const accounts = await program.provider.connection.getProgramAccounts(
       program.programId, 
       {
@@ -385,7 +403,6 @@ export const getCreatedLotteries = async (program: anchor.Program, wallet: Ancho
   } catch (error) {
     console.error('Failed to fetch created lotteries:', error);
     
-    // Fallback: try Anchor method as last resort
     try {
       console.log('Trying Anchor fetch for created lotteries as fallback...');
       const lotteries = await (program.account as any).lottery.all([
@@ -407,7 +424,6 @@ export const getCreatedLotteries = async (program: anchor.Program, wallet: Ancho
   }
 };
 
-// ---- Fetch tickets by wallet ----
 export const getMyTickets = async (program: anchor.Program, wallet: AnchorWallet) => {
   if (!program || !wallet) {
     console.warn('Program or wallet not available for getMyTickets');
@@ -417,7 +433,6 @@ export const getMyTickets = async (program: anchor.Program, wallet: AnchorWallet
   console.log(`Fetching tickets for: ${wallet.publicKey.toBase58()}`);
   
   try {
-    // Use manual account fetching as primary method due to IDL parsing issues
     const accounts = await program.provider.connection.getProgramAccounts(
       program.programId, 
       {
@@ -446,7 +461,6 @@ export const getMyTickets = async (program: anchor.Program, wallet: AnchorWallet
   } catch (error) {
     console.error('Failed to fetch tickets:', error);
     
-    // Fallback: try Anchor method as last resort
     try {
       console.log('Trying Anchor fetch for tickets as fallback...');
       const tickets = await (program.account as any).ticket.all([
@@ -468,10 +482,8 @@ export const getMyTickets = async (program: anchor.Program, wallet: AnchorWallet
   }
 };
 
-// ---- Fetch lottery by PDA ----
 export const getLotteryByPda = async (program: anchor.Program, lotteryPda: PublicKey) => {
   try {
-    // Use manual parsing as primary method due to IDL parsing issues
     const info = await program.provider.connection.getAccountInfo(lotteryPda, 'confirmed');
     if (!info) {
       console.log(`Lottery account not found: ${lotteryPda.toString()}`);
@@ -482,7 +494,6 @@ export const getLotteryByPda = async (program: anchor.Program, lotteryPda: Publi
   } catch (error) {
     console.warn(`Failed to fetch lottery ${lotteryPda.toString()} via manual parsing:`, error);
     
-    // Fallback to Anchor method
     try {
       return await (program.account as any).lottery.fetch(lotteryPda);
     } catch (anchorError) {
@@ -492,7 +503,6 @@ export const getLotteryByPda = async (program: anchor.Program, lotteryPda: Publi
   }
 };
 
-// ---- Create lottery ----
 export const createLottery = async (
   lotteryId: number,
   ticketPriceSol: number,
@@ -505,22 +515,18 @@ export const createLottery = async (
     throw new Error("Program or wallet not available");
   }
 
-  // Clean up old transactions
   cleanupOldTransactions();
 
-  // Generate transaction ID for deduplication
   const transactionId = `create-lottery-${lotteryId}-${wallet.publicKey.toString()}`;
   const now = Date.now();
   
-  // Check for recent duplicate transactions
   if (recentTransactions.has(transactionId)) {
     const lastTime = recentTransactions.get(transactionId)!;
-    if (now - lastTime < 10000) { // 10 seconds
+    if (now - lastTime < 10000) {
       throw new Error("Duplicate lottery creation attempt detected. Please wait before trying again.");
     }
   }
   
-  // Mark this transaction as in progress
   recentTransactions.set(transactionId, now);
 
   try {
@@ -530,7 +536,6 @@ export const createLottery = async (
       program.programId
     );
 
-    // Check if lottery already exists
     try {
       const existingLottery = await program.provider.connection.getAccountInfo(lotteryPda);
       if (existingLottery) {
@@ -544,8 +549,15 @@ export const createLottery = async (
       }
     }
 
+    console.log(`Creating lottery with duration: ${duration} seconds`);
+
     const tx = await program.methods
-      .initializeLottery(new anchor.BN(lotteryId), ticketPriceLamports, new anchor.BN(maxTickets), new anchor.BN(duration))
+      .initializeLottery(
+        new anchor.BN(lotteryId), 
+        ticketPriceLamports, 
+        new anchor.BN(maxTickets), 
+        new anchor.BN(duration) // Duration is sent correctly as seconds
+      )
       .accounts({
         lottery: lotteryPda,
         authority: wallet.publicKey,
@@ -561,18 +573,17 @@ export const createLottery = async (
     );
 
     console.log(`Lottery #${lotteryId} created successfully with signature: ${signature}`);
+    
+    recentTransactions.delete(transactionId);
+    
     return signature;
     
   } catch (error: any) {
-    // Remove transaction from recent transactions on error
     recentTransactions.delete(transactionId);
-    
-    // Re-throw with more context
     throw new Error(`Failed to create lottery: ${error.message}`);
   }
 };
 
-// ---- Buy ticket ----
 export const buyTicket = async (
   program: anchor.Program,
   lotteryPdaString: string,
@@ -582,24 +593,20 @@ export const buyTicket = async (
     throw new Error("Program or wallet not available");
   }
 
-  // Clean up old transactions
   cleanupOldTransactions();
 
   const lotteryPda = new PublicKey(lotteryPdaString);
   
-  // Generate transaction ID for deduplication
-  const transactionId = `buy-ticket-${lotteryPdaString}-${wallet.publicKey.toString()}`;
+  const transactionId = `buy-ticket-${lotteryPdaString}-${wallet.publicKey.toString()}-${Math.floor(Date.now() / 1000)}`;
   const now = Date.now();
   
-  // Check for recent duplicate transactions
   if (recentTransactions.has(transactionId)) {
     const lastTime = recentTransactions.get(transactionId)!;
-    if (now - lastTime < 5000) { // 5 seconds for ticket purchases
-      throw new Error("Duplicate ticket purchase attempt detected. Please wait before trying again.");
+    if (now - lastTime < 2000) {
+      throw new Error("Please wait a moment before purchasing another ticket.");
     }
   }
   
-  // Mark this transaction as in progress
   recentTransactions.set(transactionId, now);
 
   try {
@@ -614,13 +621,9 @@ export const buyTicket = async (
     }
 
     const lotteryId = parseInt(lotteryAccount.lotteryId);
-
-    // Ticket price in lamports
     const ticketPriceLamports = BigInt(lotteryAccount.ticketPrice);
-
-    // Check wallet balance with some buffer for transaction fees
     const balance = BigInt(await program.provider.connection.getBalance(wallet.publicKey));
-    const requiredBalance = ticketPriceLamports + BigInt(0.01 * LAMPORTS_PER_SOL); // Add 0.01 SOL buffer for fees
+    const requiredBalance = ticketPriceLamports + BigInt(0.01 * LAMPORTS_PER_SOL);
     
     if (balance < requiredBalance) {
       throw new Error(
@@ -628,12 +631,9 @@ export const buyTicket = async (
       );
     }
 
-    // Check if lottery is still accepting tickets
     if (lotteryAccount.ticketsSold >= lotteryAccount.maxTickets) {
       throw new Error("This lottery is sold out");
     }
- 
-    
 
     const [ticketPda] = PublicKey.findProgramAddressSync(
       [
@@ -644,7 +644,6 @@ export const buyTicket = async (
       program.programId
     );
 
-    // Check if ticket already exists (shouldn't happen, but safety check)
     try {
       const existingTicket = await program.provider.connection.getAccountInfo(ticketPda);
       if (existingTicket) {
@@ -658,7 +657,6 @@ export const buyTicket = async (
       }
     }
 
-    // Build transaction
     const tx = await program.methods.buyTicket(new anchor.BN(lotteryId))
       .accounts({
         player: wallet.publicKey,
@@ -676,19 +674,17 @@ export const buyTicket = async (
     );
 
     console.log(`Ticket purchased successfully for Lottery #${lotteryId} with signature: ${signature}`);
+    
+    recentTransactions.delete(transactionId);
+    
     return signature;
     
   } catch (error: any) {
-    // Remove transaction from recent transactions on error
     recentTransactions.delete(transactionId);
-    
-    // Re-throw with more context
     throw new Error(`Failed to buy ticket: ${error.message}`);
   }
 };
 
-
-// ---- Fulfill randomness ----
 export const fulfillRandomness = async (
   program: anchor.Program,
   lotteryPda: PublicKey,
@@ -718,7 +714,6 @@ export const fulfillRandomness = async (
   return signature;
 };
 
-// ---- Payout winner ----
 export const payoutWinner = async (
   program: anchor.Program,
   lotteryPda: PublicKey,

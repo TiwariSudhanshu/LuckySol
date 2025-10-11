@@ -10,7 +10,7 @@ pub struct Lottery {
     pub total_prize_pool: u64,
     pub winner: Option<u32>,  
     pub created_at: i64,
-    pub duration: i64,        
+    pub duration: u64,        
     pub randomness_fulfilled: bool,
     pub bump: u8,
 }

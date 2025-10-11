@@ -6,7 +6,7 @@ pub fn initialize_lottery_handler(
     lottery_id: u64,
     ticket_price: u64,
     max_tickets: u32,
-    duration: i64, // ⏳ new param
+    duration: u64, // ⏳ new param
 ) -> Result<()> {
     let lottery = &mut ctx.accounts.lottery;
     let clock = Clock::get()?;

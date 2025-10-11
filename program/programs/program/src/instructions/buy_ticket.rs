@@ -13,8 +13,16 @@ pub fn buy_ticket_handler(
     require!(lottery.lottery_id == lottery_id, LotteryError::InvalidLotteryId);
 
     // Check if lottery expired by time
+    // Use i128 arithmetic to avoid incorrect casting from u64 -> i64 which can
+    // reinterpret the bits and produce huge/negative values. Convert both
+    // created_at (i64) and duration (u64) to i128 for safe addition/comparison.
     let now = Clock::get()?.unix_timestamp;
-    if now >= lottery.created_at + lottery.duration {
+    let now_i128 = now as i128;
+    let created_i128 = lottery.created_at as i128;
+    let duration_i128 = lottery.duration as i128;
+
+    let expiry_i128 = created_i128.checked_add(duration_i128).ok_or(LotteryError::LotteryClosed)?;
+    if now_i128 >= expiry_i128 {
         return err!(LotteryError::LotteryClosed);
     }
 

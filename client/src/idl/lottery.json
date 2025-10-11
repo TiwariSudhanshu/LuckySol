@@ -1,5 +1,5 @@
 {
-  "address": "2zQLcDy3RvTNjJ2J7pjuCA58VLuoNrKgJv3Musc8qFVP",
+  "address": "8fvBHKNbzP1fhaxiEgjFp656FU2hEyhViauJcsLa6scG",
   "metadata": {
     "name": "lottery",
     "version": "0.1.0",
@@ -189,7 +189,7 @@
         },
         {
           "name": "duration",
-          "type": "i64"
+          "type": "u64"
         }
       ]
     },
@@ -353,14 +353,6 @@
             "type": "u64"
           },
           {
-            "name": "state",
-            "type": {
-              "defined": {
-                "name": "LotteryState"
-              }
-            }
-          },
-          {
             "name": "winner",
             "type": {
               "option": "u32"
@@ -372,7 +364,7 @@
           },
           {
             "name": "duration",
-            "type": "i64"
+            "type": "u64"
           },
           {
             "name": "randomness_fulfilled",
@@ -381,26 +373,6 @@
           {
             "name": "bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "LotteryState",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "WaitingForTickets"
-          },
-          {
-            "name": "WaitingForRandomness"
-          },
-          {
-            "name": "WaitingForPayout"
-          },
-          {
-            "name": "PaidOut"
           }
         ]
       }

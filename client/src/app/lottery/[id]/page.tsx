@@ -5,23 +5,23 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import BuyTicketModal from "@/components/BuyTicketModal"
 import { useProgram } from "@/lib/useProgram"
+import { getLotteryByPda, formatDuration } from "@/lib/transactions"
 import { toast } from "sonner"
 import { PublicKey } from "@solana/web3.js"
 
 interface LotteryData {
-  authority: any
+  authority: string
   bump: number
-  createdAt: any
+  createdAt: string
   id: string
-  lotteryId: any
+  lotteryId: string
   maxTickets: number
   randomnessFulfilled: boolean
-  state: any
-  ticketPrice: any
+  ticketPrice: string
   ticketsSold: number
-  totalPrizePool: any
-  winner: any
-  duration?: any
+  totalPrizePool: string
+  winner: number | null
+  duration: string
 }
 
 export default function LotteryPage() {
@@ -45,11 +45,20 @@ export default function LotteryPage() {
         return
       }
 
-      const lotteryAccount = await (program.account as any).lottery.fetch(
-        new PublicKey(id),
-      )
+      console.log(`Fetching lottery details for ID: ${id}`);
+      const lotteryAccount = await getLotteryByPda(program, new PublicKey(id as string));
 
-      setLotteryData(lotteryAccount)
+      if (!lotteryAccount) {
+        toast.error("Lottery not found")
+        setLoading(false)
+        return
+      }
+
+      console.log('Fetched lottery data:', lotteryAccount);
+      setLotteryData({
+        ...lotteryAccount,
+        id: lotteryAccount.id
+      })
       setLoading(false)
       toast.success("Lottery fetched successfully!")
     } catch (error) {
@@ -81,25 +90,17 @@ export default function LotteryPage() {
   useEffect(() => {
     if (!lotteryData?.createdAt || !lotteryData?.duration) return
 
-    const createdAtMs = lotteryData.createdAt.toNumber() * 1000
-    const durationMs = lotteryData.duration.toNumber() * 1000
+    const createdAtMs = parseInt(lotteryData.createdAt) * 1000
+    const durationMs = parseInt(lotteryData.duration) * 1000
     const endTime = createdAtMs + durationMs
 
     const updateTimer = () => {
       const now = Date.now()
       const diff = Math.max(endTime - now, 0)
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-      setTimeRemaining(
-        `${days}d ${String(hours).padStart(2, "0")}h ${String(minutes).padStart(
-          2,
-          "0",
-        )}m ${String(seconds).padStart(2, "0")}s`,
-      )
+      
+      // Convert milliseconds back to seconds and use our shared formatDuration utility
+      const remainingSeconds = Math.floor(diff / 1000)
+      setTimeRemaining(formatDuration(remainingSeconds))
     }
 
     updateTimer()
@@ -148,8 +149,23 @@ export default function LotteryPage() {
 
   const ticketPrice = lamportsToSol(lotteryData.ticketPrice)
   const prizePool = ticketPrice * lotteryData.maxTickets // ✅ FIXED: maxTickets × ticketPrice
-  const status = getLotteryStatus(lotteryData.state)
-  const lotteryIdNumber = lotteryData.lotteryId?.toNumber() || 0
+  const lotteryIdNumber = parseInt(lotteryData.lotteryId) || 0
+  
+  // Determine status based on available data
+  let status = "Open"
+  if (lotteryData.randomnessFulfilled) {
+    status = "Completed"
+  } else if (lotteryData.ticketsSold >= lotteryData.maxTickets) {
+    status = "Drawing"
+  } else {
+    // Check if lottery has expired
+    const createdAtMs = parseInt(lotteryData.createdAt) * 1000
+    const durationMs = parseInt(lotteryData.duration) * 1000
+    const endTime = createdAtMs + durationMs
+    if (Date.now() > endTime) {
+      status = "Drawing"
+    }
+  }
 
   return (
     <main className="relative min-h-screen bg-black text-white font-sans">

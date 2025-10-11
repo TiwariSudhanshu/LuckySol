@@ -9,7 +9,7 @@ pub mod errors;
 use instructions::*;
 use contexts::*;
 
-declare_id!("2zQLcDy3RvTNjJ2J7pjuCA58VLuoNrKgJv3Musc8qFVP");
+declare_id!("8fvBHKNbzP1fhaxiEgjFp656FU2hEyhViauJcsLa6scG");
 
 #[program]
 pub mod lottery {
@@ -20,7 +20,7 @@ pub mod lottery {
         lottery_id: u64,
         ticket_price: u64,
         max_tickets: u32,
-        duration: i64, 
+        duration: u64, 
     ) -> Result<()> {
         initialize_lottery_handler(ctx, lottery_id, ticket_price, max_tickets, duration)
     }

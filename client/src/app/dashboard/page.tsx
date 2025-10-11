@@ -9,6 +9,7 @@ import {
   getAllLotteries,
   getCreatedLotteries,
   getMyTickets,
+  formatDuration,
 } from "@/lib/transactions";
 import { toast } from "sonner";
 import { PublicKey } from "@solana/web3.js";
@@ -47,31 +48,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Format duration
-  const formatDuration = (value: any) => {
-    if (value == null) return "0s";
-    let seconds = 0;
-    if (typeof value === "object" && typeof value.toNumber === "function") {
-      seconds = value.toNumber();
-    } else {
-      seconds = Number(value);
-    }
-    if (isNaN(seconds) || seconds <= 0) return "0s";
-
-    const days = Math.floor(seconds / 86400);
-    seconds %= 86400;
-    const hours = Math.floor(seconds / 3600);
-    seconds %= 3600;
-    const minutes = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-
-    const parts: string[] = [];
-    if (days) parts.push(`${days}d`);
-    if (hours) parts.push(`${hours}h`);
-    if (minutes) parts.push(`${minutes}m`);
-    if (parts.length === 0) parts.push(`${secs}s`);
-    return parts.join(" ");
-  };
+  // Note: formatDuration is now imported from transactions
 
   // Format timestamp -> date only
   const formatDateOnly = (value: unknown): string => {
