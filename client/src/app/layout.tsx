@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   title: "LuckySol | Decentralized Lottery on Solana",
   description:
     "LuckySol is a decentralized lottery platform built on Solana. Buy tickets, join fair draws, and win big with transparent on-chain randomness.",
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png'
+  }
 };
 
 

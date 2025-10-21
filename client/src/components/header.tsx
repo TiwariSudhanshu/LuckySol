@@ -22,7 +22,8 @@ export function Header() {
     <header className="relative z-10">
       <div className="mx-auto flex max-w-7xl items-center justify-between py-5 md:py-6">
         <button onClick={()=>{window.location.href = '/dashboard'}} className="cursor-pointer flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-lime-500" aria-hidden="true" />
+          {/* Use the logo from /public/logo.png instead of the green circle */}
+          <img src="/logo.png" alt="LuckySol" className="h-8 w-8 object-contain" />
           <span className="text-lg font-semibold tracking-wide">LuckySol</span>
         </button>
         <nav className="flex items-center gap-3">
