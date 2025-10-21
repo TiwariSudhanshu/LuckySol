@@ -218,22 +218,21 @@ const parseLotteryAccount = (data: Uint8Array, pubkey: PublicKey): ParsedLottery
     console.log('Total prize pool parsed at offset', offset, totalPrizePool.toString());
     offset += 8;
 
-    // Parse winner (Option<u32> - 1 + 4 bytes)
+    // Parse winner (Option<u32>)
+    // Borsh serializes an Option as a 1-byte flag (0 or 1) followed by the inner value only when present.
     const hasWinner = data[offset] === 1;
     console.log('Winner flag at offset', offset, hasWinner);
     offset += 1;
     let winner: number | null = null;
     if (hasWinner) {
+      // Only advance and read the inner u32 when the option is Some
       winner = dv.getUint32(offset, true);
       console.log('Winner ID parsed at offset', offset, winner);
+      offset += 4;
     }
-    offset += 4;
 
     // Parse created_at (i64 - 8 bytes)
-    const expectedCreatedAtOffset = 77; 
-    if (offset !== expectedCreatedAtOffset) {
-      console.warn(`Expected created_at offset ${expectedCreatedAtOffset} but found ${offset}. Parsing may be misaligned.`);
-    }
+    // Note: created_at offset depends on whether `winner` contained a u32. We compute it dynamically above.
     const createdAt = dv.getBigInt64(offset, true);
     console.log('Created_at parsed at offset', offset, createdAt.toString());
     offset += 8;
