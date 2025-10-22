@@ -27,3 +27,12 @@ body {
 html {
   scroll-behavior: smooth;
 }
+
+/* Utility to hide native scrollbars but keep scrolling functional (touch scroll remains) */
+.hide-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}

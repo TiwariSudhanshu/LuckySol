@@ -86,8 +86,25 @@ export default function DashboardPage() {
         try {
           // Use the data we already have from getAllLotteries instead of fetching again
           const lottery = lotteryData._manualParse ? lotteryData : lotteryData;
+          // determine if lottery has ended based on createdAt + duration
+          let isEnded = false
+          try {
+            const createdAtSec = lottery.createdAt ? parseInt(lottery.createdAt) : null
+            const durationSec = lottery.duration ? parseInt(lottery.duration) : null
+            if (createdAtSec && durationSec) {
+              const endTime = createdAtSec + durationSec
+              const nowSec = Math.floor(Date.now() / 1000)
+              isEnded = nowSec >= endTime
+            }
+          } catch (err) {
+            isEnded = false
+          }
 
-          const status = lottery.randomnessFulfilled ? "Completed" : "Open";
+          // compute status prioritizing randomnessFulfilled, tickets full, ended, otherwise open
+          let status = "Open"
+          if (lottery.randomnessFulfilled) status = "Completed"
+          else if (lottery.ticketsSold >= lottery.maxTickets) status = "Drawing"
+          else if (isEnded) status = "Ended"
 
           return {
             id: lottery.id || lotteryData.id,
@@ -98,6 +115,7 @@ export default function DashboardPage() {
             ticketsSold: lottery.ticketsSold?.toString() || "0",
             createdAt: formatDateOnly(lottery.createdAt),
             status,
+            isEnded,
             maxTickets: lottery.maxTickets?.toString() || "0",
           };
         } catch (error) {
@@ -107,6 +125,11 @@ export default function DashboardPage() {
       });
 
       const validLotteries = transformedLotteries.filter(Boolean);
+      // sort so that ended lotteries appear last in Explore
+      validLotteries.sort((a: any, b: any) => {
+        if (a.isEnded === b.isEnded) return 0
+        return a.isEnded ? 1 : -1
+      })
       setExploreLotteries(validLotteries);
       console.log(`Dashboard: Loaded ${validLotteries.length} lotteries for explore`);
       if (showToast) toast.success(`Loaded ${validLotteries.length} lotteries`);
@@ -319,6 +342,11 @@ export default function DashboardPage() {
                 : `Round #${lottery.id}`}
             </p>
           </div>
+          {type === 'explore' && lottery.isEnded && (
+            <div className="ml-2 inline-flex items-center px-2 py-1 rounded-full bg-zinc-700 text-xs font-semibold text-zinc-300">
+              Ended
+            </div>
+          )}
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -392,36 +420,42 @@ export default function DashboardPage() {
           </p>
 
           <div className="mt-8 flex justify-center px-2">
-            <div className="flex flex-nowrap overflow-x-auto rounded-full border border-zinc-800 bg-zinc-950/70 p-1">
+            <div className="flex gap-2 overflow-x-auto hide-scrollbar rounded-full border border-zinc-800 bg-zinc-950/70 p-1 px-2 items-center max-w-full">
               <button
                 onClick={() => setActiveTab("explore")}
-                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
+                aria-label="Explore lotteries"
+                className={`rounded-full px-3 sm:px-5 py-2 text-[13px] sm:text-sm font-medium transition flex items-center justify-center min-w-[72px] sm:min-w-0 whitespace-nowrap ${
                   activeTab === "explore"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
                 }`}
               >
-                Explore Lotteries
+                <span className="hidden sm:inline">Explore Lotteries</span>
+                <span className="inline sm:hidden">Explore</span>
               </button>
               <button
                 onClick={() => setActiveTab("bought")}
-                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
+                aria-label="My tickets"
+                className={`rounded-full px-3 sm:px-5 py-2 text-[13px] sm:text-sm font-medium transition flex items-center justify-center min-w-[72px] sm:min-w-0 whitespace-nowrap ${
                   activeTab === "bought"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
                 }`}
               >
-                My Tickets
+                <span className="hidden sm:inline">My Tickets</span>
+                <span className="inline sm:hidden">Tickets</span>
               </button>
               <button
                 onClick={() => setActiveTab("created")}
-                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
+                aria-label="Created lotteries"
+                className={`rounded-full px-3 sm:px-5 py-2 text-[13px] sm:text-sm font-medium transition flex items-center justify-center min-w-[72px] sm:min-w-0 whitespace-nowrap ${
                   activeTab === "created"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
                 }`}
               >
-                Created Lotteries
+                <span className="hidden sm:inline">Created Lotteries</span>
+                <span className="inline sm:hidden">Created Lotteries</span>
               </button>
             </div>
           </div>

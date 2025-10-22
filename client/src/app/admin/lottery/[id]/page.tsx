@@ -41,6 +41,7 @@ export default function AdminLotteryPage() {
   const [lotteryData, setLotteryData] = useState<LotteryData | null>(null)
   const [loading, setLoading] = useState(true)
   const [timeLeft, setTimeLeft] = useState<number>(0)
+  const [payoutDone, setPayoutDone] = useState<boolean>(false)
 
   const program = useProgram()
   const wallet = useAnchorWallet()
@@ -190,8 +191,10 @@ const declareWinner = async () => {
         new PublicKey(lotteryData.authority),
         new PublicKey(platformFeeAccount)
       )
-      toast.success("Winner paid out successfully!")
+  toast.success("Winner paid out successfully!")
       console.log("Payout tx:", tx)
+  // mark payout as done in UI
+  setPayoutDone(true)
       // Refresh lottery data after payout
       await fetchLottery()
     } catch (error: any) {
@@ -278,6 +281,7 @@ const declareWinner = async () => {
               isPurchased={isPurchased}
               hasWinner={!!lotteryData.winner}
               randomnessFulfilled={lotteryData.randomnessFulfilled}
+              payoutDone={payoutDone}
             />
 
             <LotteryDetails
@@ -360,6 +364,7 @@ const StatusControls = ({
   isPurchased,
   hasWinner,
   randomnessFulfilled,
+  payoutDone,
 }: {
   status: string
   declareWinner: () => void
@@ -367,6 +372,7 @@ const StatusControls = ({
   isPurchased: boolean
   hasWinner: boolean
   randomnessFulfilled: boolean
+  payoutDone?: boolean
 }) => (
   <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
     <div className="flex items-center gap-3">
@@ -391,7 +397,7 @@ const StatusControls = ({
       )}
     </div>
 
-    <div className="flex gap-3 flex-wrap">
+    <div className="flex gap-3 flex-wrap items-center">
       {!randomnessFulfilled && (
         <button 
           onClick={declareWinner} 
@@ -400,13 +406,23 @@ const StatusControls = ({
           🎲 Declare Winner
         </button>
       )}
+
       {hasWinner && randomnessFulfilled && (
-        <button 
-          onClick={payout} 
-          className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors min-w-0"
-        >
-          💰 Payout Winner
-        </button>
+        payoutDone ? (
+          <button
+            disabled
+            className="px-3 py-2 bg-zinc-700 text-zinc-400 rounded-lg font-semibold cursor-not-allowed"
+          >
+            ✓ Already paid
+          </button>
+        ) : (
+          <button 
+            onClick={payout} 
+            className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors min-w-0"
+          >
+            💰 Payout Winner
+          </button>
+        )
       )}
     </div>
   </div>
