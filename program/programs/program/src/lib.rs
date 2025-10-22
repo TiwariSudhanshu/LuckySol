@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-pub const PLATFORM_FEE_WALLET: Pubkey = pubkey!("JDyrxP92FsPYjhsx145ogbTXQqXnkZhWHUQxz9ocd3ZD");
+pub const PLATFORM_FEE_WALLET: Pubkey = pubkey!("CEYaRYc7QdEjEoojtHBS8YT8KfhUhfEaVPgdS8RcbSYF");
 
 pub mod instructions;
 pub mod state;

@@ -194,8 +194,22 @@ const declareWinner = async () => {
       console.log("Payout tx:", tx)
       // Refresh lottery data after payout
       await fetchLottery()
-    } catch (error) {
-      console.error(error)
+    } catch (error: any) {
+      console.error("Payout error:", error)
+      // If this is a SendTransactionError from @solana/web3.js, try to extract logs
+      try {
+        // Some error objects expose a getLogs() async helper
+        if (typeof error.getLogs === "function") {
+          const logs = await error.getLogs()
+          console.error("Transaction logs (from getLogs):", logs)
+        } else if (error?.logs) {
+          // Some runtimes attach logs directly
+          console.error("Transaction logs:", error.logs)
+        }
+      } catch (logErr) {
+        console.error("Failed to fetch transaction logs:", logErr)
+      }
+
       toast.error("Error paying out winner")
     }
   }
