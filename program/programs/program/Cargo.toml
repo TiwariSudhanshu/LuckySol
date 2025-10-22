@@ -21,5 +21,5 @@ idl-build = ["anchor-lang/idl-build"]
 anchor-lang = "0.31.1"
 
 [package.metadata.anchor]
-program-id = "8fvBHKNbzP1fhaxiEgjFp656FU2hEyhViauJcsLa6scG"
-keypair = "target/deploy/program-keypair.json"
+program-id = "3vUR35rbkJ4Wp6fMags3Scy6MLkyGmH99JpJWFYbPowQ"
+keypair = "target/deploy/my_program-keypair.json"
