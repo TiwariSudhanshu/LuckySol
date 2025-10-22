@@ -20,7 +20,7 @@ export function SwapCard() {
       return `${key.slice(0, 4)}...${key.slice(-4)}`;
     };
   return (
-    <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur">
+  <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 sm:p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_8px_30px_rgba(0,0,0,0.4)] backdrop-blur">
       <div className="mb-4">
         <div className="mb-1 flex items-center justify-between">
           <label htmlFor="amount-sol" className="text-xs text-zinc-400">
@@ -28,13 +28,13 @@ export function SwapCard() {
           </label>
           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">SOL</span>
         </div>
-        <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5 min-w-0">
           <input
             id="amount-sol"
             type="text"
             inputMode="decimal"
             placeholder="0.00"
-            className="w-full bg-transparent text-lg outline-none placeholder:text-zinc-600"
+            className="w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-zinc-600 truncate"
             aria-readonly="true"
             readOnly
           />
@@ -49,12 +49,12 @@ export function SwapCard() {
           </label>
           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">LSOL</span>
         </div>
-        <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
+  <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5 min-w-0">
           <input
             id="you-get"
             type="text"
             placeholder="0.00"
-            className="w-full bg-transparent text-lg outline-none placeholder:text-zinc-600"
+            className="w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-zinc-600 truncate"
             aria-readonly="true"
             readOnly
           />
@@ -64,12 +64,12 @@ export function SwapCard() {
 
       <div className="mb-5">
         <div className="mb-1 text-xs text-zinc-400">Solana Address</div>
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
+  <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black px-3 py-2.5 min-w-0">
           <span className="text-zinc-500">0x</span>
           <input
             type="text"
             placeholder="(UI only) Your wallet address"
-            className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-600"
+            className="w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-zinc-600 truncate"
             aria-readonly="true"
             readOnly
           />

@@ -391,11 +391,11 @@ export default function DashboardPage() {
             tickets, and manage your created lotteries.
           </p>
 
-          <div className="mt-8 flex justify-center">
-            <div className="flex rounded-full border border-zinc-800 bg-zinc-950/70 p-1">
+          <div className="mt-8 flex justify-center px-2">
+            <div className="flex flex-nowrap overflow-x-auto rounded-full border border-zinc-800 bg-zinc-950/70 p-1">
               <button
                 onClick={() => setActiveTab("explore")}
-                className={`rounded-full px-6 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
                   activeTab === "explore"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
@@ -405,7 +405,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => setActiveTab("bought")}
-                className={`rounded-full px-6 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
                   activeTab === "bought"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
@@ -415,7 +415,7 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={() => setActiveTab("created")}
-                className={`rounded-full px-6 py-2 text-sm font-medium transition ${
+                className={`rounded-full px-3 sm:px-6 py-2 text-sm font-medium transition min-w-0 whitespace-nowrap ${
                   activeTab === "created"
                     ? "bg-lime-500 text-black"
                     : "text-zinc-300 hover:text-white"
@@ -446,11 +446,11 @@ export default function DashboardPage() {
                   "Manage the lotteries you've created."}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-nowrap">
               <button
                 onClick={refreshAllData}
                 disabled={loading || ticketsLoading}
-                className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-3 sm:px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg 
                   className={`h-4 w-4 ${loading || ticketsLoading ? 'animate-spin' : ''}`} 
@@ -460,14 +460,15 @@ export default function DashboardPage() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Refresh
+                <span className="hidden sm:inline">Refresh</span>
               </button>
               {activeTab === "created" && (
                 <Link
                   href="/create"
-                  className="flex items-center gap-2 rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black hover:bg-lime-400"
+                  className="flex items-center gap-2 rounded-full bg-lime-500 px-3 py-2 text-sm font-semibold text-black hover:bg-lime-400 min-w-0"
                 >
-                  + Create New
+                  <span className="hidden sm:inline truncate">+ Create New</span>
+                  <span className="inline sm:hidden">+</span>
                 </Link>
               )}
             </div>

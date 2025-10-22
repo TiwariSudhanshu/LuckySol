@@ -112,8 +112,8 @@ const handleBuyTickets = async () => {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+      <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950 p-4 sm:p-6 shadow-2xl">
         {/* Close button */}
         <button onClick={onClose} className="absolute right-4 top-4 text-zinc-400 hover:text-white">
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -122,12 +122,12 @@ const handleBuyTickets = async () => {
         </button>
 
         {/* Header */}
-        <div className="mb-6 text-center">
+          <div className="mb-6 text-center">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
             Enter the next LuckySol round
           </p>
           <h1 className="text-2xl font-extrabold leading-tight md:text-3xl">Buy Tickets</h1>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+          <p className="mt-2 text-sm leading-relaxed text-zinc-300 break-words">
             Choose how many tickets to purchase for Lottery #{lotteryId}
           </p>
         </div>
@@ -142,14 +142,14 @@ const handleBuyTickets = async () => {
               </label>
               <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">#</span>
             </div>
-            <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
+            <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-black px-3 py-2.5 min-w-0">
               <input
                 id="ticket-count"
                 type="number"
                 min={1}
                 value={ticketCount}
                 onChange={(e) => setTicketCount(Number(e.target.value))}
-                className="w-full bg-transparent text-lg outline-none placeholder:text-zinc-600"
+                className="w-full min-w-0 bg-transparent text-lg outline-none placeholder:text-zinc-600"
               />
               <div className="size-5 rounded-full border border-zinc-700" />
             </div>
@@ -167,7 +167,7 @@ const handleBuyTickets = async () => {
           </div>
 
           {/* Address */}
-          <div className="mb-5">
+            <div className="mb-5">
             <div className="mb-1 text-xs text-zinc-400">Solana Address</div>
             <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black px-3 py-2.5">
               <span className="text-zinc-500">0x</span>
@@ -175,7 +175,7 @@ const handleBuyTickets = async () => {
                 type="text"
                 value={connected && publicKey ? publicKey.toBase58() : ""}
                 placeholder={connected ? "Wallet connected" : "Connect your wallet first"}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-600"
+                className="w-full min-w-0 break-all bg-transparent text-sm outline-none placeholder:text-zinc-600"
                 readOnly
               />
             </div>
@@ -187,24 +187,24 @@ const handleBuyTickets = async () => {
               <button
                 type="button"
                 disabled
-                className="flex-1 rounded-2xl bg-zinc-700 px-5 py-3 text-sm font-bold text-zinc-400 cursor-not-allowed"
+                className="flex-1 rounded-2xl bg-zinc-700 px-5 py-3 text-sm font-bold text-zinc-400 cursor-not-allowed min-w-0"
               >
-                Wallet Connected
+                <span className="truncate">Wallet Connected</span>
               </button>
             ) : (
               <button
                 type="button"
                 onClick={handleWalletAction}
-                className="flex-1 rounded-2xl bg-lime-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
+                className="flex-1 rounded-2xl bg-lime-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black min-w-0"
               >
-                Connect Wallet
+                <span className="truncate">Connect Wallet</span>
               </button>
             )}
             <button
               type="button"
               onClick={handleBuyTickets}
               disabled={!connected || loading}
-              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold cursor-pointer text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-900 transition-colors"
+              className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-3 text-sm font-semibold cursor-pointer text-zinc-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-900 transition-colors min-w-0"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">

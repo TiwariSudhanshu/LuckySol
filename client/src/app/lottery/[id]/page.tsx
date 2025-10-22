@@ -149,7 +149,10 @@ export default function LotteryPage() {
 
   const ticketPrice = lamportsToSol(lotteryData.ticketPrice)
   const prizePool = ticketPrice * lotteryData.maxTickets // ✅ FIXED: maxTickets × ticketPrice
-  const lotteryIdNumber = parseInt(lotteryData.lotteryId) || 0
+  const lotteryIdNumber = lotteryData.lotteryId || ''
+  const displayLotteryId = typeof lotteryIdNumber === 'string' && lotteryIdNumber.length > 12
+    ? `${lotteryIdNumber.slice(0,8)}...${lotteryIdNumber.slice(-4)}`
+    : lotteryIdNumber
   
   // Determine status based on available data
   let status = "Open"
@@ -174,11 +177,11 @@ export default function LotteryPage() {
       <section className="relative z-10 pt-20 pb-12">
         <div className="mx-auto max-w-4xl px-6">
           <div className="text-center mb-8">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
-              Round #{lotteryIdNumber}
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400 break-words">
+              Round #{displayLotteryId}
             </p>
-            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4">
-              Lottery #{lotteryIdNumber}
+            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4 break-words">
+              Lottery #{displayLotteryId}
             </h1>
             <p className="text-zinc-300 max-w-2xl mx-auto leading-relaxed">
               Join this blockchain lottery with transparent draws and instant payouts on Solana.

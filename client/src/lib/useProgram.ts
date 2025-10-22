@@ -10,7 +10,9 @@ export function useProgram(){
 
     const program = useMemo(()=>{
         if(!wallet){
-            console.error("Wallet not connected");
+            // Wallet may be unavailable during initial render/hydration.
+            // Use debug log instead of error to avoid noisy error reporting.
+            console.debug("useProgram: wallet not connected");
             return null;
         }
  

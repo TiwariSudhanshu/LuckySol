@@ -46,7 +46,7 @@ export function Hero() {
               <button
                 type="button"
                 onClick={handleNavigate}
-                className=" rounded- cursor-pointer bg-lime-500 px-20 rounded-3xl py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
+                className="rounded-3xl cursor-pointer bg-lime-500 px-6 sm:px-12 py-3 text-lg font-semibold text-black transition hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"
               >
                Launch
               </button>

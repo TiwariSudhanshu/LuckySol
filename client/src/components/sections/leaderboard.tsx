@@ -14,7 +14,7 @@ export function Leaderboard() {
       <div className="mx-auto max-w-6xl px-4 py-12 md:py-16">
         <h2 className="text-pretty text-center text-2xl font-bold md:text-3xl">Leaderboard</h2>
         <div className="mt-6 overflow-hidden rounded-2xl border border-zinc-800 bg-black">
-          <div className="grid grid-cols-12 gap-0 border-b border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-400">
+          <div className="hidden md:grid grid-cols-12 gap-0 border-b border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-400">
             <div className="col-span-2">Rank</div>
             <div className="col-span-5">User</div>
             <div className="col-span-3">Tickets</div>
@@ -23,7 +23,7 @@ export function Leaderboard() {
           {rows.map((r, i) => (
             <div
               key={r.name}
-              className="grid grid-cols-12 items-center px-4 py-3 text-sm border-b border-zinc-900/60 last:border-b-0"
+              className="grid grid-cols-12 md:grid-cols-12 items-center px-4 py-3 text-sm border-b border-zinc-900/60 last:border-b-0 gap-2 md:gap-0"
             >
               <div className="col-span-2 flex items-center gap-2">
                 <span
@@ -34,9 +34,15 @@ export function Leaderboard() {
                   {r.rank}
                 </span>
               </div>
-              <div className="col-span-5 text-white">{r.name}</div>
-              <div className="col-span-3 text-zinc-300">{r.tickets}</div>
-              <div className="col-span-2 text-right font-semibold">{r.prize}</div>
+              <div className="col-span-5 md:col-span-5 text-white min-w-0">
+                <span className="truncate block md:inline">{r.name}</span>
+              </div>
+              <div className="col-span-3 md:col-span-3 text-zinc-300 min-w-0">
+                <span className="truncate block md:inline">{r.tickets}</span>
+              </div>
+              <div className="col-span-2 md:col-span-2 text-right font-semibold min-w-0">
+                <span className="truncate block md:inline">{r.prize}</span>
+              </div>
             </div>
           ))}
         </div>

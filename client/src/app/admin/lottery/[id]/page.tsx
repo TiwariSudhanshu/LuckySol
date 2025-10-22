@@ -230,7 +230,10 @@ const declareWinner = async () => {
 
   const ticketPrice = lamportsToSol(lotteryData.ticketPrice)
   const totalPrizePool = lamportsToSol(lotteryData.totalPrizePool)
-  const lotteryIdNumber = parseInt(lotteryData.lotteryId) || 0
+  const lotteryIdNumber = lotteryData.lotteryId || ''
+  const displayLotteryId = typeof lotteryIdNumber === 'string' && lotteryIdNumber.length > 12
+    ? `${lotteryIdNumber.slice(0,8)}...${lotteryIdNumber.slice(-4)}`
+    : lotteryIdNumber
   
   // Determine status based on available data
   let status = "Open"
@@ -254,18 +257,20 @@ const declareWinner = async () => {
 
       <section className="relative z-10 pt-20 pb-12">
         <div className="mx-auto max-w-4xl px-6">
-          <div className="text-center mb-8">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400">
-              Admin Panel - Round #{lotteryIdNumber}
+          <div className="text-center mb-8 px-2">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-lime-400 break-words">
+              Admin Panel - Round #{displayLotteryId}
             </p>
-            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4">Lottery #{lotteryIdNumber}</h1>
+            <h1 className="text-3xl font-bold md:text-4xl lg:text-5xl text-white mb-4 leading-tight">
+              <span className="inline-block max-w-full break-words truncate">Lottery #{displayLotteryId}</span>
+            </h1>
             <p className="text-zinc-300 max-w-2xl mx-auto leading-relaxed">
               Admin control panel for managing this blockchain lottery with transparent draws and instant payouts on Solana.
             </p>
           </div>
 
           {/* Lottery Card */}
-          <div className="border border-zinc-800 bg-zinc-900/50 rounded-2xl p-8 backdrop-blur-sm mb-8">
+          <div className="border border-zinc-800 bg-zinc-900/50 rounded-2xl p-6 sm:p-8 backdrop-blur-sm mb-8">
             <StatusControls
               status={status}
               declareWinner={declareWinner}
@@ -390,7 +395,7 @@ const StatusControls = ({
       {!randomnessFulfilled && (
         <button 
           onClick={declareWinner} 
-          className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold transition-colors"
+          className="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-semibold transition-colors min-w-0"
         >
           🎲 Declare Winner
         </button>
@@ -398,7 +403,7 @@ const StatusControls = ({
       {hasWinner && randomnessFulfilled && (
         <button 
           onClick={payout} 
-          className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors"
+          className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-semibold transition-colors min-w-0"
         >
           💰 Payout Winner
         </button>
@@ -407,62 +412,68 @@ const StatusControls = ({
   </div>
 )
 
-const LotteryDetails = ({ lotteryData, ticketPrice, totalPrizePool, timeLeft, lotteryIdNumber }: any) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs text-zinc-400 uppercase tracking-wide">Organizer</label>
-        <div className="mt-1 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-          <code className="text-sm text-zinc-200 break-all">{lotteryData.authority.toString()}</code>
-        </div>
-      </div>
+const LotteryDetails = ({ lotteryData, ticketPrice, totalPrizePool, timeLeft, lotteryIdNumber }: any) => {
+  const displayLotteryIdLocal = typeof lotteryIdNumber === 'string' && lotteryIdNumber.length > 12
+    ? `${lotteryIdNumber.slice(0,8)}...${lotteryIdNumber.slice(-4)}`
+    : lotteryIdNumber
 
-      <div className="grid grid-cols-2 gap-4">
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="space-y-4">
         <div>
-          <label className="text-xs text-zinc-400 uppercase tracking-wide">Ticket Price</label>
-          <div className="mt-1 text-xl font-bold text-lime-400">{ticketPrice.toFixed(3)} SOL</div>
-        </div>
-        <div>
-          <label className="text-xs text-zinc-400 uppercase tracking-wide">Round Number</label>
-          <div className="mt-1 text-xl font-bold text-white">#{lotteryIdNumber}</div>
-        </div>
-      </div>
-
-      {lotteryData.winner !== null && lotteryData.winner !== undefined && (
-        <div>
-          <label className="text-xs text-zinc-400 uppercase tracking-wide">Winner Ticket #</label>
-          <div className="mt-1 p-3 bg-green-800/20 rounded-lg border border-green-700">
-            <code className="text-sm text-green-200 break-all">Ticket #{lotteryData.winner}</code>
+          <label className="text-xs text-zinc-400 uppercase tracking-wide">Organizer</label>
+          <div className="mt-1 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+            <code className="text-sm text-zinc-200 break-all">{lotteryData.authority.toString()}</code>
           </div>
         </div>
-      )}
-    </div>
 
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs text-zinc-400 uppercase tracking-wide">Prize Pool</label>
-        <div className="mt-1 text-3xl font-bold text-white">{totalPrizePool.toFixed(3)} SOL</div>
-      </div>
-
-      <div>
-        <label className="text-xs text-zinc-400 uppercase tracking-wide">Tickets Sold</label>
-        <div className="mt-1 flex items-center gap-3">
-          <span className="text-lg font-semibold text-white">
-            {lotteryData.ticketsSold} / {lotteryData.maxTickets}
-          </span>
-          <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-lime-500 to-lime-400 rounded-full"
-              style={{ width: `${(lotteryData.ticketsSold / lotteryData.maxTickets) * 100}%` }}
-            ></div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-zinc-400 uppercase tracking-wide">Ticket Price</label>
+            <div className="mt-1 text-xl font-bold text-lime-400">{ticketPrice.toFixed(3)} SOL</div>
+          </div>
+          <div>
+            <label className="text-xs text-zinc-400 uppercase tracking-wide">Round Number</label>
+            <div className="mt-1 text-xl font-bold text-white break-words">#{displayLotteryIdLocal}</div>
           </div>
         </div>
+
+        {lotteryData.winner !== null && lotteryData.winner !== undefined && (
+          <div>
+            <label className="text-xs text-zinc-400 uppercase tracking-wide">Winner Ticket #</label>
+            <div className="mt-1 p-3 bg-green-800/20 rounded-lg border border-green-700">
+              <code className="text-sm text-green-200 break-all">Ticket #{lotteryData.winner}</code>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div>
-        <label className="text-xs text-zinc-400 uppercase tracking-wide">Time Remaining</label>
-        <div className="mt-1 text-lg font-semibold text-orange-400">{formatDuration(timeLeft)}</div>
+      <div className="space-y-4">
+        <div>
+          <label className="text-xs text-zinc-400 uppercase tracking-wide">Prize Pool</label>
+          <div className="mt-1 text-3xl font-bold text-white">{totalPrizePool.toFixed(3)} SOL</div>
+        </div>
+
+        <div>
+          <label className="text-xs text-zinc-400 uppercase tracking-wide">Tickets Sold</label>
+          <div className="mt-1 flex items-center gap-3">
+            <span className="text-lg font-semibold text-white">
+              {lotteryData.ticketsSold} / {lotteryData.maxTickets}
+            </span>
+            <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-lime-500 to-lime-400 rounded-full"
+                style={{ width: `${(lotteryData.ticketsSold / lotteryData.maxTickets) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-zinc-400 uppercase tracking-wide">Time Remaining</label>
+          <div className="mt-1 text-lg font-semibold text-orange-400">{formatDuration(timeLeft)}</div>
+        </div>
       </div>
     </div>
-  </div>
-)
+  )
+}
