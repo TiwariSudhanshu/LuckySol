@@ -154,7 +154,7 @@ const declareWinner = async () => {
 
 
   const payout = async () => {
-    if (!program || !wallet || !id || !lotteryData?.winner || !lotteryData?.authority) return
+    if (!program || !wallet || !id || lotteryData?.winner === null || lotteryData?.winner === undefined || !lotteryData?.authority) return
     const platformFeeAccount = process.env.NEXT_PUBLIC_PLATFORM_FEE_ACCOUNT
     if (!platformFeeAccount) return console.error("Platform fee account not set")
 
@@ -279,7 +279,8 @@ const declareWinner = async () => {
               declareWinner={declareWinner}
               payout={payout}
               isPurchased={isPurchased}
-              hasWinner={!!lotteryData.winner}
+              // Winner can be ticket #0, so explicitly check for null/undefined
+              hasWinner={lotteryData.winner !== null && lotteryData.winner !== undefined}
               randomnessFulfilled={lotteryData.randomnessFulfilled}
               payoutDone={payoutDone}
             />
@@ -375,29 +376,25 @@ const StatusControls = ({
   payoutDone?: boolean
 }) => (
   <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-    <div className="flex items-center gap-3">
-      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-lime-500/20 text-lime-400 border border-lime-500/30">
+    <div className="flex items-center gap-3 flex-wrap min-w-0">
+      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-lime-500/20 text-lime-400 border border-lime-500/30 whitespace-nowrap">
         <div className="w-2 h-2 bg-lime-400 rounded-full mr-2 animate-pulse"></div>
         {status.toUpperCase()}
       </span>
       {isPurchased && (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-500/20 text-violet-400 border border-violet-500/30">
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-500/20 text-violet-400 border border-violet-500/30 whitespace-nowrap">
           ✓ PURCHASED
         </span>
       )}
-      {randomnessFulfilled && (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
-          🎲 RANDOMNESS FULFILLED
-        </span>
-      )}
       {hasWinner && (
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+        // Keep winner badge next to completed on small screens
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30 whitespace-nowrap sm:ml-2">
           🏆 WINNER SELECTED
         </span>
       )}
     </div>
 
-    <div className="flex gap-3 flex-wrap items-center">
+  <div className="flex gap-3 flex-wrap items-center justify-end z-10">
       {!randomnessFulfilled && (
         <button 
           onClick={declareWinner} 

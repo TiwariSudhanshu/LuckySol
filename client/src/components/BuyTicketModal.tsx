@@ -66,8 +66,13 @@ const handleBuyTickets = async () => {
       if (response) {
         // Dismiss processing toast and show success
         toast.dismiss(processingToast);
-        toast.success("� Ticket purchased successfully!", {
-          description: `Transaction: ${response.slice(0, 8)}...${response.slice(-8)}`
+
+        // If we received a real signature string, show a shortened version. Otherwise show a generic success.
+        const isSig = typeof response === 'string' && response.length > 10 && !response.includes('_');
+        const description = isSig ? `Transaction: ${response.slice(0, 8)}...${response.slice(-8)}` : undefined;
+
+        toast.success("🎟️ Ticket purchased successfully!", {
+          description
         });
         console.log("Transaction signature:", response);
         

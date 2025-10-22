@@ -106,6 +106,10 @@ export default function DashboardPage() {
           else if (lottery.ticketsSold >= lottery.maxTickets) status = "Drawing"
           else if (isEnded) status = "Ended"
 
+          // Determine whether users can still join this lottery from the UI.
+          // Allow joining when randomness hasn't been fulfilled and tickets aren't sold out.
+          const canJoin = !lottery.randomnessFulfilled && (lottery.ticketsSold < lottery.maxTickets);
+
           return {
             id: lottery.id || lotteryData.id,
             name: `Lottery #${lottery.lotteryId || index + 1}`,
@@ -116,6 +120,7 @@ export default function DashboardPage() {
             createdAt: formatDateOnly(lottery.createdAt),
             status,
             isEnded,
+            canJoin,
             maxTickets: lottery.maxTickets?.toString() || "0",
           };
         } catch (error) {
@@ -383,7 +388,7 @@ export default function DashboardPage() {
           </p>
 
           {type === "explore" &&
-            (lottery.status === "Live" || lottery.status === "Open") && (
+            lottery.canJoin && (
               <Link
                 href={`/lottery/${lottery.id}`}
                 className="rounded-full bg-lime-500 px-4 py-2 text-sm font-semibold text-black hover:bg-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-400 focus:ring-offset-2 focus:ring-offset-black"

@@ -157,6 +157,22 @@ const sendTransactionWithRetry = async (
   throw lastError || new Error(`${transactionType} failed after ${MAX_RETRIES} attempts`);
 };
 
+// Try to find a recent signature for an account (PDA) to verify a prior transaction
+const findRecentSignatureForAddress = async (connection: Connection, address: PublicKey): Promise<string | null> => {
+  try {
+    // Query recent signatures for this address (limit small for performance)
+    const sigs = await connection.getSignaturesForAddress(address, { limit: 5 });
+    if (sigs && sigs.length > 0) {
+      console.log('Found recent signatures for address', address.toBase58(), sigs.map(s => s.signature));
+      return sigs[0].signature;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch signatures for address', address.toBase58(), e);
+  }
+
+  return null;
+};
+
 interface ParsedLottery {
   id: string;
   authority: string;
@@ -527,13 +543,14 @@ export const createLottery = async (
   }
   
   recentTransactions.set(transactionId, now);
+  // Precompute values we may need in error-handling paths
+  const ticketPriceLamports = new anchor.BN(ticketPriceSol * LAMPORTS_PER_SOL);
+  const [lotteryPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from("lottery"), new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8)],
+    program.programId
+  );
 
   try {
-    const ticketPriceLamports = new anchor.BN(ticketPriceSol * LAMPORTS_PER_SOL);
-    const [lotteryPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("lottery"), new anchor.BN(lotteryId).toArrayLike(Buffer, "le", 8)],
-      program.programId
-    );
 
     try {
       const existingLottery = await program.provider.connection.getAccountInfo(lotteryPda);
@@ -579,6 +596,26 @@ export const createLottery = async (
     
   } catch (error: any) {
     recentTransactions.delete(transactionId);
+
+    // If this looks like a duplicate/already-processed error, verify whether the lottery account
+    // was actually created. If the PDA exists, try to return a signature so the UI treats it as success.
+    if (error && typeof error.message === 'string' && (error.message.includes('already been processed') || error.message.includes('duplicate') || error.message.includes('already processed'))) {
+      try {
+        const info = await program.provider.connection.getAccountInfo(lotteryPda);
+        if (info) {
+          const sig = await findRecentSignatureForAddress(program.provider.connection, lotteryPda);
+          if (sig) {
+            console.log('Detected existing lottery after duplicate error, returning signature:', sig);
+            return sig;
+          }
+          console.log('Lottery account exists after duplicate error but no recent signature found, returning placeholder success');
+          return 'transaction_already_processed';
+        }
+      } catch (verifyErr) {
+        console.warn('Failed to verify lottery PDA after duplicate error:', verifyErr);
+      }
+    }
+
     throw new Error(`Failed to create lottery: ${error.message}`);
   }
 };
@@ -608,6 +645,9 @@ export const buyTicket = async (
   
   recentTransactions.set(transactionId, now);
 
+  // ticketPda may be populated during the attempt; declare it here so the catch handler can inspect it
+  let ticketPda: PublicKey | null = null;
+
   try {
     let lotteryAccount: any;
 
@@ -634,7 +674,7 @@ export const buyTicket = async (
       throw new Error("This lottery is sold out");
     }
 
-    const [ticketPda] = PublicKey.findProgramAddressSync(
+    const ticketPdaResult = PublicKey.findProgramAddressSync(
       [
         Buffer.from("ticket"),
         lotteryPda.toBuffer(),
@@ -642,6 +682,7 @@ export const buyTicket = async (
       ],
       program.programId
     );
+    ticketPda = ticketPdaResult[0];
 
     try {
       const existingTicket = await program.provider.connection.getAccountInfo(ticketPda);
@@ -680,6 +721,30 @@ export const buyTicket = async (
     
   } catch (error: any) {
     recentTransactions.delete(transactionId);
+
+    // If this looks like a duplicate/already-processed error, verify whether the ticket PDA
+    // was actually created. If the PDA exists, try to return a signature so the UI treats it as success.
+    if (error && typeof error.message === 'string' && (error.message.includes('already been processed') || error.message.includes('duplicate') || error.message.includes('already processed'))) {
+      try {
+        if (ticketPda) {
+          const ticketInfo = await program.provider.connection.getAccountInfo(ticketPda);
+          if (ticketInfo) {
+            const sig = await findRecentSignatureForAddress(program.provider.connection, ticketPda);
+            if (sig) {
+              console.log('Detected ticket PDA after duplicate error, returning signature:', sig);
+              return sig;
+            }
+            console.log('Ticket PDA exists after duplicate error but no recent signature found, returning placeholder success');
+            return 'transaction_already_processed';
+          }
+        } else {
+          console.warn('ticketPda was not set before error; cannot verify duplicate transaction via PDA');
+        }
+      } catch (verifyErr) {
+        console.warn('Failed to verify ticket PDA after duplicate error:', verifyErr);
+      }
+    }
+
     throw new Error(`Failed to buy ticket: ${error.message}`);
   }
 };
